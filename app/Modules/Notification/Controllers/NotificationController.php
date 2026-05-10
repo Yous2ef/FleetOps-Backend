@@ -29,9 +29,70 @@ class NotificationController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        // TODO: return paginated notifications for auth user
-        // $notifications = NotificationRepository->getForUser($request->user()->user_id, $request->per_page ?? 20)
-        // return response()->json(['success' => true, 'data' => $notifications])
+        try {
+            // Seed data if empty
+            if (\App\Modules\Notification\Models\Notification::count() === 0) {
+                $firstUser = \App\Modules\AuthIdentity\Models\User::first();
+                $userId = $request->user() ? $request->user()->user_id : ($firstUser ? $firstUser->user_id : 1);
+                
+                $dummies = [
+                    [
+                        'user_id' => $userId,
+                        'channel' => 'push',
+                        'event_type' => 'status_update',
+                        'payload' => json_encode([
+                            'title' => 'Route Started', 
+                            'body' => 'Your route R-001 has been started.',
+                            'description' => 'The system has successfully dispatched vehicle V-101 for route R-001. All stops have been synchronized to the driver app.'
+                        ]),
+                        'status' => 'delivered',
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ],
+                    [
+                        'user_id' => $userId,
+                        'channel' => 'push',
+                        'event_type' => 'delay_alert',
+                        'payload' => json_encode([
+                            'title' => 'Traffic Delay', 
+                            'body' => 'Expect a 15 min delay on Route R-002.',
+                            'description' => 'Heavy traffic detected on the Ring Road near the 6th of October exit. Estimated time of arrival for Stop 3 has been adjusted.'
+                        ]),
+                        'status' => 'delivered',
+                        'created_at' => now()->subMinutes(30),
+                        'updated_at' => now()->subMinutes(30),
+                    ],
+                    [
+                        'user_id' => $userId,
+                        'channel' => 'push',
+                        'event_type' => 'maintenance_alert',
+                        'payload' => json_encode([
+                            'title' => 'Maintenance Required', 
+                            'body' => 'Vehicle V-101 needs oil change.',
+                            'description' => 'Predictive maintenance alert: Vehicle V-101 has reached 10,000 km since its last oil change. Please schedule a visit to the workshop.'
+                        ]),
+                        'status' => 'pending',
+                        'created_at' => now()->subHours(2),
+                        'updated_at' => now()->subHours(2),
+                    ],
+                ];
+                \App\Modules\Notification\Models\Notification::insert($dummies);
+            }
+
+            // Fetch notifications
+            $perPage = (int) $request->input('per_page', 20);
+            $firstUser = \App\Modules\AuthIdentity\Models\User::first();
+            $userId = $request->user() ? $request->user()->user_id : ($firstUser ? $firstUser->user_id : 1);
+            
+            $notifications = \App\Modules\Notification\Models\Notification::where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->paginate($perPage);
+
+            return response()->json(['success' => true, 'data' => $notifications]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('NotificationController::index Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 
     /**

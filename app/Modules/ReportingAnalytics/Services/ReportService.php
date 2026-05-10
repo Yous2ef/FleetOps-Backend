@@ -261,6 +261,44 @@ class ReportService
         return $report;
     }
 
+    
+    public function getActiveFleetData(string $date): array
+    {
+        $routes = Route::with(['driver.user', 'stops.order'])
+            ->where('status', 'Active')
+            ->whereDate('scheduled_start_time', $date)
+            ->get();
+
+        return $routes->map(function ($route) {
+            $totalStops = $route->total_stops ?: $route->stops->count();
+            $completedStops = $route->stops->whereNotNull('actual_arrival_time')->count();
+            
+            $progress = $totalStops > 0 ? round(($completedStops / $totalStops) * 100) : 0;
+            
+            // Determine Location
+            $nextStop = $route->stops->whereNull('actual_arrival_time')->first();
+            $location = 'En Route';
+            if ($nextStop && $nextStop->order && $nextStop->order->Area) {
+                $location = $nextStop->order->Area;
+            } elseif ($route->route_name) {
+                $location = $route->route_name;
+            }
+
+            // ETA formatting
+            $eta = $route->scheduled_end_time 
+                ? $route->scheduled_end_time->format('h:i A') 
+                : '--:--';
+
+            return [
+                'route_id' => 'R-' . str_pad($route->route_id, 3, '0', STR_PAD_LEFT),
+                'location' => $location,
+                'driver'   => $route->driver && $route->driver->user ? $route->driver->user->name : 'Unassigned',
+                'progress' => $progress,
+                'eta'      => $eta,
+            ];
+        })->toArray();
+    }
+
     /**
      * تقرير لوحة قيادة العمليات اليومية
      * Aggregates data from Routes, Orders, Alerts, and Fuel logs
@@ -299,6 +337,7 @@ class ReportService
 
             // ── 3. Open Alerts (unresolved incidents) ────────────────────────────
             $openAlerts = IncidentReport::query()
+                ->open()
                 ->whereDate('incident_ts', '<=', $date)
                 ->count();
 
@@ -351,6 +390,7 @@ class ReportService
                     'change'   => $this->calculateChange($deliveryRate, $deliveryRateYesterday),
                     'positive' => $this->isPositive($deliveryRate, $deliveryRateYesterday),
                 ],
+                'active_fleet_data' => $this->getActiveFleetData($date),
             ];
 
         } catch (\Exception $e) {

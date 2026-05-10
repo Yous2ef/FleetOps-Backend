@@ -17,7 +17,7 @@ class CodController extends Controller
     {
         try {
             // Eager load relationships to prevent N+1 queries
-            $records = CashLedger::with(['order.customer', 'order.vehicle', 'driver.user'])->get();
+            $records = CashLedger::with(['order.customer.user', 'order.vehicle', 'driver.user'])->get();
 
             $formattedRecords = $records->map(function ($record) {
                 return $this->formatCodRecord($record);
@@ -44,7 +44,7 @@ class CodController extends Controller
         $transactionId = str_replace('COD-', '', $id);
 
         try {
-            $record = CashLedger::with(['order.customer', 'order.vehicle', 'driver.user'])
+            $record = CashLedger::with(['order.customer.user', 'order.vehicle', 'driver.user'])
                 ->findOrFail($transactionId);
 
             return response()->json([
@@ -72,7 +72,7 @@ class CodController extends Controller
         $transactionId = str_replace('COD-', '', $id);
 
         try {
-            $record = CashLedger::with(['order.customer', 'order.vehicle', 'driver.user'])
+            $record = CashLedger::with(['order.customer.user', 'order.vehicle', 'driver.user'])
                 ->findOrFail($transactionId);
 
             // Update handover status
@@ -105,6 +105,7 @@ class CodController extends Controller
         $order = $record->order;
         $driver = $record->driver;
         $customer = $order ? $order->customer : null;
+        $customerUser = $customer ? $customer->user : null;
         $vehicle = $order ? $order->vehicle : null;
         
         // Calculate handover status text
@@ -130,13 +131,13 @@ class CodController extends Controller
         return [
             'id' => 'COD-' . $record->transaction_id,
             'orderId' => 'ORD-' . $record->order_id,
-            'customer' => $customer ? $customer->name : 'Unknown Customer',
-            'customerPhone' => $customer ? $customer->contact_info : 'N/A', // Assuming contact_info holds phone based on schema
-            'address' => $order ? ($order->Delivery_address ?? $order->Area ?? 'Unknown Address') : 'Unknown Address',
+            'customer' => $customerUser ? $customerUser->name : 'Unknown Customer',
+            'customerPhone' => $customerUser ? ($customerUser->phone_no ?? 'N/A') : 'N/A',
+            'address' => $order ? ($order->Area ?? $customer->address ?? 'Unknown Address') : 'Unknown Address',
             'driver' => $driverName,
             'driverInitials' => strtoupper(substr($driverInitials, 0, 2)),
             'routeId' => 'N/A', // Route ID is not directly in cash_ledger or order, returning N/A or mock
-            'vehicleId' => $vehicle ? $vehicle->license_plate : 'N/A',
+            'vehicleId' => $vehicle ? $vehicle->VehicleLicense : 'N/A',
             'expectedAmount' => $order ? (float)$order->Price : 0,
             'collectedAmount' => (float)$record->amount_collected,
             'collectionStatus' => $collectionStatus,

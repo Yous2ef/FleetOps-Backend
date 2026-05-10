@@ -29,10 +29,16 @@ class RouteController extends Controller
     }
 
     /** GET /api/v1/dispatch/routes */
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        $routes = $this->routeService->getAllRoutes(request('per_page', 15));
-        return response()->json(['success' => true, 'data' => $routes]);
+        try {
+            $perPage = (int) $request->input('per_page', 15);
+            $routes = $this->routeService->getAllRoutes($perPage);
+            return response()->json(['success' => true, 'data' => $routes]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('RouteController::index Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
     }
 
     /** GET /api/v1/dispatch/routes/{id} */

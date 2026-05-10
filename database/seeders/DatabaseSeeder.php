@@ -22,6 +22,8 @@ class DatabaseSeeder extends Seeder
             CashLedgerSeeder::class,         // Tier 4: cash_ledger (after orders & drivers)
             FuelAuditLogSeeder::class,       // Tier 1: fuel_audit_logs
             IncidentReportSeeder::class,     // Tier 2: incident_reports
+            NotificationPreferenceSeeder::class, // Notification preferences
+            NotificationSeeder::class,           // Sample notifications
         ]);
     }
 }

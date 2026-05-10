@@ -29,13 +29,48 @@ class UserRepository extends BaseRepository
     {
         return $this->model->where('email', $email)->first();
     }
-
     /**
      * جلب المستخدمين النشطين
      */
     public function getActiveUsers(): EloquentCollection
     {
         return $this->model->active()->get();
+    }
+    
+    /**
+     * Build the standard frontend driver shape from a Driver + eager-loaded User.
+     * Centralizes mapping so both getDrivers() and getDriversByStatus() stay consistent.
+     */
+    private function mapDriver($driver): array
+    {
+        // Derive initials from the linked user's name (e.g. "Ahmed Sayed" → "AS")
+        $name     = $driver->user->name ?? '';
+        $initials = '';
+        if ($name) {
+            $initials = implode('', array_map(
+                fn($word) => strtoupper(mb_substr($word, 0, 1)),
+                array_filter(explode(' ', $name))
+            ));
+        }
+
+        return [
+            'driver_id'       => (string) $driver->driver_id,
+            'name'            => $name,
+            'initials'        => $initials,
+            'status'          => $driver->status ?? '',
+            'score'           => (int) ($driver->score ?? 0),
+            'shift'           => $driver->status ?? '',   // mirrors status until a dedicated shift col exists
+            'license_type'    => $driver->license_type ?? '',
+            'license_no'      => $driver->license_no ?? '',
+            'stats'           => [
+                'deliveries'   => 0,
+                'success_rate' => 0,
+                'on_time_rate' => 0,
+                'avg_time'     => 0,
+            ],
+            'current_vehicle' => $driver->vehicle_id ? (string) $driver->vehicle_id : null,
+            'current_route'   => null,
+        ];
     }
 
     /**

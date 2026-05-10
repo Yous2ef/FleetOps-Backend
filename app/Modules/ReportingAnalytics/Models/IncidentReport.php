@@ -35,6 +35,7 @@ class IncidentReport extends Model
         'type',
         'severity',
         'description',
+        'status',
         'latitude',
         'longitude',
         'photo_urls',   // JSON field
@@ -55,6 +56,11 @@ class IncidentReport extends Model
     public function scopeBySeverity($query, string $severity)
     {
         return $query->where('severity', $severity);
+    }
+
+    public function scopeOpen($query)
+    {
+        return $query->where('status', 'Open');
     }
 
     public function scopeByType($query, string $type)

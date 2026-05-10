@@ -9,8 +9,14 @@
 
 namespace App\Modules\OrderManagement\Services;
 
+use App\Modules\AuthIdentity\Models\Customer;
+use App\Modules\AuthIdentity\Models\User;
+use App\Modules\OrderManagement\Models\Order;
 use App\Modules\OrderManagement\Repositories\OrderRepository;
 use Exception;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class OrderService
 {
@@ -45,11 +51,69 @@ class OrderService
 
     public function createOrder(array $data)
     {
-        $data['Status'] = 'Pending';
-        if (!isset($data['digital_signature']) || empty($data['digital_signature'])) {
-            $data['digital_signature'] = \Illuminate\Support\Str::uuid();
-        }
-        return $this->orderRepository->create($data);
+        return DB::transaction(function () use ($data) {
+            $email = $data['customer_email']
+                ?: 'customer-' . Str::uuid() . '@fleetops.local';
+
+            $user = User::firstOrCreate(
+                ['email' => $email],
+                [
+                    'password' => Hash::make(Str::password(16)),
+                    'name' => $data['customer_name'],
+                    'phone_no' => $data['customer_phone'],
+                    'role' => 'Customer',
+                    'is_active' => true,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]
+            );
+
+            $user->fill([
+                'name' => $data['customer_name'],
+                'phone_no' => $data['customer_phone'],
+                'updated_at' => now(),
+            ])->save();
+
+            Customer::updateOrCreate(
+                ['customer_id' => $user->user_id],
+                [
+                    'address' => $data['delivery_address'],
+                    'delivery_preference' => $data['delivery_preference'] ?? null,
+                    'created_at' => now(),
+                ]
+            );
+
+            $priority = ($data['priority'] ?? 'normal') === 'express' ? 80 : 40;
+            $type = ($data['priority'] ?? 'normal') === 'express' ? 'Express' : 'Normal';
+            $price = ($data['payment_type'] ?? 'prepaid') === 'COD'
+                ? (int) ($data['cod_amount'] ?? 0)
+                : 0;
+
+            $order = Order::create([
+                'CustomerID(FK)' => $user->user_id,
+                'Status' => 'Pending',
+                'Priority' => $priority,
+                'Type' => $type,
+                'Price' => $price,
+                'digital_signature' => strtoupper(Str::random(10)),
+                'Delivery_preference' => $data['delivery_preference'] ?? null,
+                'Payment_method' => $data['payment_type'] === 'COD' ? 'COD' : 'Prepaid',
+                'Created_at' => now(),
+                'UpdatedAt' => now(),
+                'Perishable' => false,
+                'Weight' => (int) $data['weight_kg'],
+                'Volume' => isset($data['volume_m3']) ? (int) $data['volume_m3'] : null,
+                'DeliveryTimeWindow' => null,
+                'Longitude' => $data['lng'],
+                'Latitude' => $data['lat'],
+                'Area' => $data['delivery_address'],
+            ]);
+
+            $order->LiveTrackingLink = 'http://fleetops.com/track/' . $order->OrderID;
+            $order->save();
+
+            return $order->load(['customer.user', 'vehicle', 'driver.user']);
+        });
     }
 
     public function updateOrder(int $id, array $data)

@@ -13,17 +13,20 @@ show_help() {
     echo "  up          - Start all containers"
     echo "  down        - Stop all containers"
     echo "  restart     - Restart all containers"
+    echo "  rebuild     - Rebuild and start containers"
     echo "  logs        - Show logs from all containers"
     echo "  logs-app    - Show logs from app container"
     echo "  logs-db     - Show logs from database"
     echo "  shell       - Access app container shell"
     echo "  db          - Access SQL Server CLI"
     echo "  migrate     - Run database migrations"
-    echo "  fresh       - Fresh database with migrations"
+    echo "  seed        - Seed the database with test data"
+    echo "  fresh       - Fresh database with migrations and seeds"
     echo "  optimize    - Optimize Laravel caches"
     echo "  clear       - Clear all Laravel caches"
     echo "  test        - Run tests"
     echo "  status      - Show container status"
+    echo "  health      - Check API health"
     echo "  clean       - Remove all containers and volumes"
     echo ""
 }
@@ -32,61 +35,29 @@ install() {
     echo -e "\033[1;36mBuilding and starting FleetOps Backend...\033[0m"
     docker compose up -d --build
     
-    echo -e "\033[1;33mWaiting for SQL Server to be ready...\033[0m"
-    sleep 30
+    echo -e "\033[1;33mWaiting for services to be ready...\033[0m"
+    sleep 20
     
-    echo -e "\033[1;33mCreating database...\033[0m"
-    docker compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Fleetops12345678!" -C -Q "IF NOT EXISTS (SELECT * FROM sys.databases WHERE name = 'fleetops') CREATE DATABASE fleetops"
-    
-    echo -e "\033[1;33mCreating .env file...\033[0m"
-    docker compose exec app sh -c 'if [ ! -f .env ]; then cp .env.example .env 2>/dev/null || cat > .env << "EOF"
-APP_NAME=FleetOps
-APP_ENV=production
-APP_KEY=
-APP_DEBUG=false
-APP_URL=http://localhost
-
-LOG_CHANNEL=stack
-LOG_LEVEL=info
-
-DB_CONNECTION=sqlsrv
-DB_HOST=sqlserver
-DB_PORT=1433
-DB_DATABASE=fleetops
-DB_USERNAME=sa
-DB_PASSWORD=Fleetops12345678!
-DB_ENCRYPT=optional
-DB_TRUST_SERVER_CERTIFICATE=true
-
-SESSION_DRIVER=database
-SESSION_LIFETIME=120
-
-CACHE_STORE=database
-QUEUE_CONNECTION=database
-
-BROADCAST_CONNECTION=log
-FILESYSTEM_DISK=local
-
-MAIL_MAILER=log
-MAIL_FROM_ADDRESS="noreply@fleetops.com"
-MAIL_FROM_NAME="FleetOps"
-EOF
-fi'
-    
-    echo -e "\033[1;33mGenerating application key...\033[0m"
-    docker compose exec app php artisan key:generate --force
+    echo -e "\033[1;33mEnsuring database exists...\033[0m"
+    docker compose exec -T sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Fleetops12345678!" -C -Q "IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'fleetops') CREATE DATABASE fleetops"
     
     echo -e "\033[1;33mRunning migrations...\033[0m"
     docker compose exec app php artisan migrate --force
     
-    echo -e "\033[1;33mOptimizing application...\033[0m"
+    echo -e "\033[1;33mSeeding database with test data...\033[0m"
+    docker compose exec app php artisan db:seed --force
+    
+    echo -e "\033[1;33mClearing and optimizing caches...\033[0m"
+    docker compose exec app php artisan cache:clear
+    docker compose exec app php artisan config:clear
     docker compose exec app php artisan config:cache
     docker compose exec app php artisan route:cache
     
     echo ""
     echo -e "\033[1;32mSetup complete!\033[0m"
     echo -e "\033[1;36mAPI available at: http://localhost:8000\033[0m"
-    echo -e "\033[1;36mHealth check: http://localhost:8000/api/health\033[0m"
+    echo -e "\033[1;36mHealth check: http://localhost:8000/up\033[0m"
+    echo -e "\033[1;36mLogin endpoint: http://localhost:8000/api/v1/auth/login\033[0m"
 }
 
 start_containers() {
@@ -105,6 +76,12 @@ restart_containers() {
     echo -e "\033[1;36mRestarting containers...\033[0m"
     docker compose restart
     echo -e "\033[1;32mContainers restarted!\033[0m"
+}
+
+rebuild_containers() {
+    echo -e "\033[1;36mRebuilding and starting containers...\033[0m"
+    docker compose up -d --build
+    echo -e "\033[1;32mContainers rebuilt and started!\033[0m"
 }
 
 show_logs() {
@@ -133,10 +110,17 @@ run_migrations() {
     echo -e "\033[1;32mMigrations complete!\033[0m"
 }
 
+seed_database() {
+    echo -e "\033[1;36mSeeding database with test data...\033[0m"
+    docker compose exec app php artisan db:seed --force
+    echo -e "\033[1;32mDatabase seeded!\033[0m"
+}
+
 fresh_database() {
-    echo -e "\033[1;36mRefreshing database...\033[0m"
+    echo -e "\033[1;36mRefreshing database with fresh migrations and seeds...\033[0m"
     docker compose exec app php artisan migrate:fresh --force
-    echo -e "\033[1;32mDatabase refreshed!\033[0m"
+    docker compose exec app php artisan db:seed --force
+    echo -e "\033[1;32mDatabase refreshed and seeded!\033[0m"
 }
 
 optimize_app() {
@@ -165,6 +149,23 @@ show_status() {
     docker compose ps
 }
 
+check_health() {
+    echo -e "\033[1;36mChecking API health...\033[0m"
+    if response=$(curl -s -w "\n%{http_code}" http://localhost:8000/up 2>/dev/null); then
+        http_code=$(echo "$response" | tail -n 1)
+        if [ "$http_code" = "200" ]; then
+            echo -e "\033[1;32m✅ API is healthy!\033[0m"
+            echo -e "\033[1;32mStatus Code: $http_code\033[0m"
+        else
+            echo -e "\033[1;31m❌ API is not responding properly\033[0m"
+            echo -e "\033[1;31mStatus Code: $http_code\033[0m"
+        fi
+    else
+        echo -e "\033[1;31m❌ API is not responding properly\033[0m"
+        echo -e "\033[1;31mError: Connection failed\033[0m"
+    fi
+}
+
 clean_all() {
     echo -e "\033[1;31mWARNING: This will remove all containers and volumes!\033[0m"
     read -p "Are you sure? (yes/no) " confirm
@@ -184,17 +185,20 @@ case "$(echo "$COMMAND" | tr '[:upper:]' '[:lower:]')" in
     "up") start_containers ;;
     "down") stop_containers ;;
     "restart") restart_containers ;;
+    "rebuild") rebuild_containers ;;
     "logs") show_logs ;;
     "logs-app") show_applogs ;;
     "logs-db") show_dblogs ;;
     "shell") enter_shell ;;
     "db") enter_database ;;
     "migrate") run_migrations ;;
+    "seed") seed_database ;;
     "fresh") fresh_database ;;
     "optimize") optimize_app ;;
     "clear") clear_caches ;;
     "test") run_tests ;;
     "status") show_status ;;
+    "health") check_health ;;
     "clean") clean_all ;;
     *) show_help ;;
 esac
