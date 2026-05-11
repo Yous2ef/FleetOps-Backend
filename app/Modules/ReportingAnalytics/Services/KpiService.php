@@ -410,28 +410,7 @@ class KpiService
     public function generateCO2Report(string $period = 'monthly'): array
     {
         
-        $now = Carbon::now();
-
-        // Current period window
-        if ($period === 'quarterly') {
-            // Start of current quarter: first day of Jan/Apr/Jul/Oct
-            $quarterMonth = (int) floor(($now->month - 1) / 3) * 3 + 1;
-            $curStart = $now->copy()->setMonth($quarterMonth)->startOfMonth()->startOfDay();
-            $curEnd   = $now->copy()->endOfDay();
-        } else {
-            $curStart = $now->copy()->startOfMonth()->startOfDay();
-            $curEnd   = $now->copy()->endOfDay();
-        }
-
-        // Previous period window
-        $prevEnd   = $curStart->copy()->subSecond();
-        if ($period === 'quarterly') {
-            // Previous quarter: go back 3 months from prevEnd
-            $prevQuarterMonth = (int) floor(($prevEnd->month - 1) / 3) * 3 + 1;
-            $prevStart = $prevEnd->copy()->setMonth($prevQuarterMonth)->startOfMonth()->startOfDay();
-        } else {
-            $prevStart = $prevEnd->copy()->startOfMonth()->startOfDay();
-        }
+        $now = Carbon::now();        
 
         $factors = ['light' => 0.21, 'heavy' => 0.37, 'refrigerated' => 0.43];
 

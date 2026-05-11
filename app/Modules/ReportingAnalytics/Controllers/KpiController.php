@@ -76,12 +76,12 @@ class KpiController extends Controller
 
     /**
      * تقرير CO2/الاستدامة (AN-03 / fn40)
-     * GET /api/v1/analytics/kpis/co2-report?period=monthly|quarterly
+     * GET /api/v1/analytics/kpis/co2-report?period=monthly
      */
     public function co2Report(Request $request): JsonResponse
     {
         $request->validate([
-            'period' => 'sometimes|string|in:monthly,quarterly',
+            'period' => 'sometimes|string|in:monthly',
         ], [
             'period.in' => 'الفترة غير صالحة',
         ]);

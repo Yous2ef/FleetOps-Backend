@@ -261,7 +261,41 @@ class ReportService
         return $report;
     }
 
-    
+
+    /**
+     * مخطط الإيرادات الشهرية (analytics-revenue-chart)
+     * Returns monthly revenue totals for the last N months from cash_ledger.
+     *
+     * @param int $months  Number of past months to include (1–24)
+     * @return array  ['months' => int, 'labels' => string[], 'data' => float[], 'currency' => 'EGP']
+     */
+    public function getRevenueChart(int $months = 6): array
+    {
+        $labels  = [];
+        $revenue = [];
+
+        for ($i = $months - 1; $i >= 0; $i--) {
+            $month      = Carbon::now()->subMonths($i)->startOfMonth();
+            $monthStart = $month->copy()->startOfMonth()->startOfDay();
+            $monthEnd   = $month->copy()->endOfMonth()->endOfDay();
+
+            $total = DB::table('cash_ledger')
+                ->where('payment_status', 'collected')
+                ->whereBetween('transaction_ts', [$monthStart, $monthEnd])
+                ->sum('amount_collected');
+
+            $labels[]  = $month->format('M Y');          // e.g. "Nov 2025"
+            $revenue[] = round((float) $total, 2);
+        }
+
+        return [
+            'months'   => $months,
+            'labels'   => $labels,
+            'data'     => $revenue,
+            'currency' => 'EGP',
+        ];
+    }
+
     public function getActiveFleetData(string $date): array
     {
         $routes = Route::with(['driver.user', 'stops.order'])
