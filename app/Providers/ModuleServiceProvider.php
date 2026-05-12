@@ -216,6 +216,11 @@ class ModuleServiceProvider extends ServiceProvider
         );
 
         $this->app->singleton(
+            \App\Modules\OrderManagement\Services\CustomerTrackingService::class,
+            fn() => new \App\Modules\OrderManagement\Services\CustomerTrackingService()
+        );
+
+        $this->app->singleton(
             \App\Modules\OrderManagement\Services\ProofOfDeliveryService::class,
             fn($app) => new \App\Modules\OrderManagement\Services\ProofOfDeliveryService(
                 $app->make(\App\Modules\OrderManagement\Repositories\OrderRepository::class),

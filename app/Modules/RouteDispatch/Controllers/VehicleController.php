@@ -11,7 +11,12 @@ namespace App\Modules\RouteDispatch\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\RouteDispatch\Services\VehicleService;
+use App\Modules\RouteDispatch\Models\Vehicle;
+use App\Modules\RouteDispatch\Resources\VehicleResource;
 use App\Modules\RouteDispatch\Requests\VehicleRequest;
+use App\Modules\RouteDispatch\Requests\StoreVehicleRequest;
+use App\Modules\RouteDispatch\Requests\UpdateVehicleRequest;
+use App\Modules\RouteDispatch\Resources\VehicleDetailResource;
 use Exception;
 use Illuminate\Http\JsonResponse;
 
@@ -27,7 +32,19 @@ class VehicleController extends Controller
     /** GET /api/v1/dispatch/vehicles */
     public function index(): JsonResponse
     {
-        // TODO: return paginated vehicles list
+        try {
+            $vehicles = Vehicle::all();
+            return response()->json([
+                'success' => true,
+                'data' => VehicleResource::collection($vehicles)
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve vehicles',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /** GET /api/v1/dispatch/vehicles/{id} */
@@ -48,10 +65,12 @@ class VehicleController extends Controller
         }
     }
 
-    /** POST /api/v1/dispatch/vehicles */
+    /** POST /api/v1/dispatch/vehicles  (generic CRUD — reserved for future use) */
     public function store(VehicleRequest $request): JsonResponse
     {
-        // TODO: Create vehicle → 201
+        // Delegated to storeFleetVehicle for the fleet screen.
+        // This stub remains to satisfy the existing route registration.
+        return $this->storeFleetVehicle($request);
     }
 
     /** PUT /api/v1/dispatch/vehicles/{id} */
@@ -113,6 +132,81 @@ class VehicleController extends Controller
     // =========================================================================
 
     /**
+     * إضافة مركبة جديدة عبر شاشة Fleet Management
+     * POST /api/v1/dispatch/fleet/vehicles
+     *
+     * Accepts validated snake_case input, maps to SQL Server column names,
+     * and returns the full VehicleDetailResource so the frontend table row
+     * receives the same shape as the detail modal.
+     *
+     * Body (JSON):
+     *   plate        (string, required, unique) — e.g. "TRK-099"
+     *   type         (string, required)         — "light"|"heavy"|"refrigerated"
+     *   max_weight   (numeric, required)        — kg
+     *   max_volume   (numeric, required)        — m³
+     *   odometer     (numeric, required)        — km
+     *   market_value (numeric, required)        — SAR
+     *   make_model   (string, optional)         — free-text "Toyota Hilux"
+     */
+    public function storeFleetVehicle(StoreVehicleRequest $request): JsonResponse
+    {
+        try {
+            $vehicle  = $this->vehicleService->createFleetVehicle($request->validated());
+            $resource = new VehicleDetailResource($vehicle);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Vehicle added successfully.',
+                'data'    => $resource->toArray($request),
+            ], 201);
+
+        } catch (Exception $e) {
+            $statusCode = (int) $e->getCode();
+            if ($statusCode < 400 || $statusCode > 599) {
+                $statusCode = 500;
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data'    => [],
+                'errors'  => [],
+            ], $statusCode);
+        }
+    }
+
+    /**
+     * تحديث مركبة عبر شاشة Fleet Management
+     * PUT/PATCH /api/v1/dispatch/fleet/vehicles/{id}
+     */
+    public function updateFleetVehicle(int $id, UpdateVehicleRequest $request): JsonResponse
+    {
+        try {
+            $vehicle  = $this->vehicleService->updateFleetVehicle($id, $request->validated());
+            $resource = new VehicleDetailResource($vehicle);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Vehicle updated successfully.',
+                'data'    => $resource->toArray($request),
+            ], 200);
+
+        } catch (Exception $e) {
+            $statusCode = (int) $e->getCode();
+            if ($statusCode < 400 || $statusCode > 599) {
+                $statusCode = 500;
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data'    => [],
+                'errors'  => [],
+            ], $statusCode);
+        }
+    }
+
+    /**
      * جلب قائمة الأسطول الكاملة لشاشة Fleet Management
      * GET /api/v1/dispatch/fleet/vehicles
      *
@@ -142,6 +236,46 @@ class VehicleController extends Controller
                 'data'    => [],           // keep data key present for frontend stability
                 'errors'  => $e->getTrace(),
             ], 500);
+        }
+    }
+
+    /**
+     * جلب تفاصيل مركبة واحدة مع بيانات الرسوم البيانية (Charts)
+     * GET /api/v1/dispatch/fleet/vehicles/{id}
+     *
+     * Returns the full vehicle detail payload consumed by the Fleet Management
+     * detail modal, including:
+     *   – All list fields (id, plate, type, status, odometer_display …)
+     *   – odometer_history  : int[]   (6 monthly readings, Chart.js line data)
+     *   – fuel_efficiency_history : float[]  (6 km/L readings, Chart.js bar data)
+     *   – chart_months      : string[] (e.g. ['Dec','Jan','Feb','Mar','Apr','May'])
+     *   – insurance_expiry  : string   (e.g. "May 01, 2027")
+     *   – inspection_expiry : string   (e.g. "Nov 01, 2026")
+     *   – last_service      : string   (Y-m-d, never null)
+     */
+    public function fleetVehicleDetail(int $id): JsonResponse
+    {
+        try {
+            $vehicle  = $this->vehicleService->getFleetVehicleDetail($id);
+            $resource = new VehicleDetailResource($vehicle);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Vehicle detail retrieved successfully.',
+                'data'    => $resource->toArray(request()),
+            ], 200);
+        } catch (Exception $e) {
+            $statusCode = (int) $e->getCode();
+            // getCode() is 0 when not explicitly set — default to 404 for not-found
+            if ($statusCode < 400 || $statusCode > 599) {
+                $statusCode = 404;
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+                'data'    => [],
+            ], $statusCode);
         }
     }
 

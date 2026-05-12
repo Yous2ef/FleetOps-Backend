@@ -14,6 +14,7 @@ use App\Modules\OrderManagement\Services\OrderService;
 use App\Modules\OrderManagement\Services\OrderImportService;
 use App\Modules\OrderManagement\Requests\OrderRequest;
 use App\Modules\OrderManagement\Requests\BulkImportRequest;
+use App\Modules\OrderManagement\Resources\OrderResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,9 +32,17 @@ class OrderController extends Controller
     public function index(Request $request): JsonResponse
     {
         $perPage = $request->query('per_page', 15);
+        $paginator = $this->orderService->getAllOrders((int) $perPage);
+
         return response()->json([
-            'success' => true, 
-            'data' => $this->orderService->getAllOrders((int) $perPage)
+            'success' => true,
+            'data'    => OrderResource::collection($paginator->items()),
+            'meta'    => [
+                'current_page' => $paginator->currentPage(),
+                'last_page'    => $paginator->lastPage(),
+                'per_page'     => $paginator->perPage(),
+                'total'        => $paginator->total(),
+            ],
         ]);
     }
 
@@ -41,7 +50,10 @@ class OrderController extends Controller
     {
         try {
             $order = $this->orderService->getOrderById($id);
-            return response()->json(['success' => true, 'data' => $order]);
+            return response()->json([
+                'success' => true,
+                'data'    => new OrderResource($order),
+            ]);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Order not found'], 404);
         }
@@ -51,7 +63,10 @@ class OrderController extends Controller
     {
         try {
             $order = $this->orderService->createOrder($request->validated());
-            return response()->json(['success' => true, 'data' => $order], 201);
+            return response()->json([
+                'success' => true,
+                'data'    => new OrderResource($order),
+            ], 201);
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 400);
         }

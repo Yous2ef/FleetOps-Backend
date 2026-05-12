@@ -12,6 +12,7 @@ use App\Modules\OrderManagement\Controllers\OrderController;
 use App\Modules\OrderManagement\Controllers\ProofOfDeliveryController;
 use App\Modules\OrderManagement\Controllers\InspectionController;
 use App\Modules\OrderManagement\Controllers\CustomerPortalController;
+use App\Modules\OrderManagement\Controllers\CustomerTrackingController;
 use App\Modules\OrderManagement\Controllers\CodController;
 
 Route::prefix('api/v1')->middleware('auth:sanctum')->group(function () {
@@ -101,8 +102,35 @@ Route::prefix('api/customer-portal')->name('customer-portal.')->group(function (
         ->name('unsuccessful-attempt')
         ->middleware('throttle:30,1');
 
+
     Route::get('support',                     [CustomerPortalController::class, 'getSupportInfo'])
         ->name('support-info')
         ->middleware('throttle:30,1');
 });
 
+// =============================================================================
+// Customer Tracking API  (api/v1/customer — distinct from legacy customer-portal)
+// Public — no auth:sanctum; token-level security enforced in service layer.
+// =============================================================================
+Route::prefix('api/v1/customer')
+    ->name('customer.tracking.')
+    ->group(function () {
+
+        // GET  api/v1/customer/tracking/{tracking_code}
+        // ── Returns full order snapshot: status, ETA, address, driver, timeline, items.
+        Route::get('/tracking/{tracking_code}', [CustomerTrackingController::class, 'show'])
+            ->name('show')
+            ->middleware('throttle:60,1');
+
+        // POST api/v1/customer/tracking/{tracking_code}/preferences
+        // ── Save delivery preferences (ring doorbell, leave at door, notes).
+        Route::post('/tracking/{tracking_code}/preferences', [CustomerTrackingController::class, 'storePreferences'])
+            ->name('preferences')
+            ->middleware('throttle:30,1');
+
+        // POST api/v1/customer/tracking/{tracking_code}/feedback
+        // ── Submit post-delivery feedback (rating 1-5, condition, comments).
+        Route::post('/tracking/{tracking_code}/feedback', [CustomerTrackingController::class, 'storeFeedback'])
+            ->name('feedback')
+            ->middleware('throttle:5,1');
+    });

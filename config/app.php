@@ -123,4 +123,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Customer Tracking Portal URL
+    |--------------------------------------------------------------------------
+    |
+    | The base URL of the Customer Portal SPA. Used to construct full tracking
+    | links in API responses (e.g. "http://localhost:3001/track?token=abc123").
+    | Set CUSTOMER_PORTAL_URL in your .env to override for staging/production.
+    |
+    */
+    'customer_portal_url' => env('CUSTOMER_PORTAL_URL', 'http://localhost:3001'),
+
 ];

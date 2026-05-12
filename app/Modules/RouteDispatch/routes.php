@@ -114,9 +114,32 @@ Route::prefix('api/v1/dispatch')->middleware('auth:sanctum')->group(function () 
 
     Route::prefix('fleet')->group(function () {
 
+        // POST /api/v1/dispatch/fleet/vehicles  ← Add new vehicle from Fleet screen
+        Route::post('/vehicles', [VehicleController::class, 'storeFleetVehicle'])
+            ->name('dispatch.fleet.vehicles.store');
+
+        // PUT/PATCH /api/v1/dispatch/fleet/vehicles/{id} ← Update vehicle
+        Route::match(['put', 'patch'], '/vehicles/{id}', [VehicleController::class, 'updateFleetVehicle'])
+            ->name('dispatch.fleet.vehicles.update')
+            ->where('id', '[0-9]+');
+
+        // GET /api/v1/dispatch/fleet/vehicles/{id}  ← detail (must precede the list route)
+        Route::get('/vehicles/{id}', [VehicleController::class, 'fleetVehicleDetail'])
+            ->name('dispatch.fleet.vehicles.detail')
+            ->where('id', '[0-9]+');
+
+        // GET /api/v1/dispatch/fleet/vehicles  ← list
         Route::get('/vehicles', [VehicleController::class, 'fleetVehicles'])
             ->name('dispatch.fleet.vehicles.fleet-screen');
-        Route::get('/drivers', [VehicleController::class, 'fleetDrivers'])
+
+        Route::get('/drivers', [\App\Modules\RouteDispatch\Controllers\DriverController::class, 'index'])
             ->name('dispatch.fleet.drivers.fleet-screen');
+        
+        Route::get('/drivers/{id}', [\App\Modules\RouteDispatch\Controllers\DriverController::class, 'show'])
+            ->name('dispatch.fleet.drivers.show')
+            ->where('id', '[0-9]+');
+
+        Route::post('/drivers', [\App\Modules\RouteDispatch\Controllers\DriverController::class, 'store'])
+            ->name('dispatch.fleet.drivers.store');
     });
 });

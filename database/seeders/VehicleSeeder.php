@@ -4,32 +4,77 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
-/**
- * VehicleSeeder — أسطول من 8 مركبات حقيقية
- */
 class VehicleSeeder extends Seeder
 {
-    public function run(): void
+    public function run()
     {
+        $now = Carbon::now();
+
         $vehicles = [
-            ['VehicleModel' => 'Toyota Hilux',      'VehicleType' => 'light',        'VehicleLicense' => 'أ ب ج 1001', 'MaxWeightCapacity' => 1500.00, 'Status' => 'Active',      'Current_odometer' => 45200.00,  'MaxVolume' => 8.50,  'MarketValue' => 950000],
-            ['VehicleModel' => 'Isuzu D-Max',       'VehicleType' => 'heavy',        'VehicleLicense' => 'أ ب ج 1002', 'MaxWeightCapacity' => 2000.00, 'Status' => 'Active',      'Current_odometer' => 88750.00,  'MaxVolume' => 119.20,  'MarketValue' => 1100000],
-            ['VehicleModel' => 'Ford Transit',      'VehicleType' => 'refrigerated', 'VehicleLicense' => 'أ ب ج 1003', 'MaxWeightCapacity' => 3500.00, 'Status' => 'Active',      'Current_odometer' => 121300.00, 'MaxVolume' => 12.00, 'MarketValue' => 1350000],
-            ['VehicleModel' => 'Mercedes Sprinter', 'VehicleType' => 'heavy',        'VehicleLicense' => 'أ ب ج 1004', 'MaxWeightCapacity' => 3500.00, 'Status' => 'Maintenance', 'Current_odometer' => 203500.00, 'MaxVolume' => 13.50, 'MarketValue' => 1750000],
-            ['VehicleModel' => 'Hyundai H350',      'VehicleType' => 'light',        'VehicleLicense' => 'أ ب ج 1005', 'MaxWeightCapacity' => 2500.00, 'Status' => 'Active',      'Current_odometer' => 67400.00,  'MaxVolume' => 10.00, 'MarketValue' => 1200000],
-            ['VehicleModel' => 'Mitsubishi Fuso',   'VehicleType' => 'heavy',        'VehicleLicense' => 'أ ب ج 1006', 'MaxWeightCapacity' => 7000.00, 'Status' => 'Active',      'Current_odometer' => 155000.00, 'MaxVolume' => 50.00, 'MarketValue' => 2100000],
-            ['VehicleModel' => 'Nissan Urvan',      'VehicleType' => 'light',        'VehicleLicense' => 'أ ب ج 1007', 'MaxWeightCapacity' => 1200.00, 'Status' => 'Active',      'Current_odometer' => 34100.00,  'MaxVolume' => 25.80,  'MarketValue' => 880000],
-            ['VehicleModel' => 'MAN TGS',           'VehicleType' => 'heavy',        'VehicleLicense' => 'أ ب ج 1008', 'MaxWeightCapacity' => 18000.00,'Status' => 'OutOfService','Current_odometer' => 412000.00, 'MaxVolume' => 24.00, 'MarketValue' => 3200000],
+            [
+                'VehicleModel'      => 'Toyota Hilux 2023',
+                'VehicleType'       => 'light',
+                'VehicleLicense'    => 'ABC-1234',
+                'MaxWeightCapacity' => 1000.00,
+                'Status'            => 'Active',
+                'Current_odometer'  => 12500.50,
+                'MaxVolume'         => 5.00,
+                'MarketValue'       => 85000,
+                'CreatedAt'         => $now,
+                'UpdatedAt'         => $now,
+            ],
+            [
+                'VehicleModel'      => 'Isuzu NPR 2022',
+                'VehicleType'       => 'heavy',
+                'VehicleLicense'    => 'XYZ-9876',
+                'MaxWeightCapacity' => 4500.00,
+                'Status'            => 'Active',
+                'Current_odometer'  => 34200.00,
+                'MaxVolume'         => 15.50,
+                'MarketValue'       => 150000,
+                'CreatedAt'         => $now,
+                'UpdatedAt'         => $now,
+            ],
+            [
+                'VehicleModel'      => 'Mercedes-Benz Sprinter',
+                'VehicleType'       => 'refrigerated',
+                'VehicleLicense'    => 'RTY-5544',
+                'MaxWeightCapacity' => 2500.00,
+                'Status'            => 'Maintenance',
+                'Current_odometer'  => 85000.75,
+                'MaxVolume'         => 12.00,
+                'MarketValue'       => 120000,
+                'CreatedAt'         => $now,
+                'UpdatedAt'         => $now,
+            ],
+            [
+                'VehicleModel'      => 'Ford Transit 2021',
+                'VehicleType'       => 'light',
+                'VehicleLicense'    => 'LMN-1122',
+                'MaxWeightCapacity' => 1200.00,
+                'Status'            => 'Active',
+                'Current_odometer'  => 45000.25,
+                'MaxVolume'         => 6.50,
+                'MarketValue'       => 75000,
+                'CreatedAt'         => $now,
+                'UpdatedAt'         => $now,
+            ],
+            [
+                'VehicleModel'      => 'Volvo FH16',
+                'VehicleType'       => 'heavy',
+                'VehicleLicense'    => 'TRK-9988',
+                'MaxWeightCapacity' => 18000.00,
+                'Status'            => 'Active',
+                'Current_odometer'  => 150000.00,
+                'MaxVolume'         => 33.00,
+                'MarketValue'       => 350000,
+                'CreatedAt'         => $now,
+                'UpdatedAt'         => $now,
+            ],
         ];
 
-        foreach ($vehicles as $v) {
-            DB::table('vehicles')->updateOrInsert(
-                ['VehicleLicense' => $v['VehicleLicense']],
-                array_merge($v, ['CreatedAt' => now()])
-            );
-        }
-
-        $this->command->info('✅ VehicleSeeder: ' . count($vehicles) . ' vehicles ready.');
+        DB::table('vehicles')->insert($vehicles);
     }
 }

@@ -116,6 +116,117 @@ class VehicleService
         }
     }
 
+    /**
+     * Create a new vehicle record from the Fleet Management "Add Vehicle" form.
+     *
+     * Maps the validated, snake_case frontend payload to the exact SQL Server
+     * column names in the vehicles table.
+     *
+     * @param  array{
+     *   plate: string,
+     *   type: string,
+     *   max_weight: numeric,
+     *   max_volume: numeric,
+     *   odometer: numeric,
+     *   market_value: numeric,
+     *   make_model?: string|null
+     * } $data  Validated data from StoreVehicleRequest
+     *
+     * @return \stdClass  The newly inserted row (fetched back by vehicle_id)
+     * @throws \Exception  If the insert or re-fetch fails
+     */
+    public function createFleetVehicle(array $data): \stdClass
+    {
+        $now = \Carbon\Carbon::now();
+
+        // Map frontend field names → exact DB column names (SQL Server PascalCase)
+        $row = [
+            'VehicleLicense'    => strtoupper(trim($data['plate'])),
+            'VehicleType'       => strtolower($data['type']),
+            'MaxWeightCapacity' => (float) $data['max_weight'],
+            'MaxVolume'         => (float) $data['max_volume'],
+            'Current_odometer'  => (float) $data['odometer'],
+            'MarketValue'       => (int)   $data['market_value'],
+            'VehicleModel'      => $data['vehicle_model'],
+            'Status'            => 'Available',   // new vehicles default to Available
+            'CreatedAt'         => $now,
+            'UpdatedAt'         => $now,
+        ];
+
+        // Insert and get the new auto-incremented vehicle_id.
+        // DB::table insertGetId() is the safest way to handle SQL Server IDENTITY columns.
+        $newId = \Illuminate\Support\Facades\DB::table('vehicles')->insertGetId($row, 'vehicle_id');
+
+        if (! $newId) {
+            throw new \Exception('Failed to insert vehicle record.', 500);
+        }
+
+        // Re-fetch the row so VehicleDetailResource receives a proper stdClass
+        // with all columns (including any DB-level defaults).
+        $vehicle = \Illuminate\Support\Facades\DB::table('vehicles')
+            ->where('vehicle_id', $newId)
+            ->first();
+
+        if (! $vehicle) {
+            throw new \Exception("Created vehicle (ID {$newId}) could not be retrieved.", 500);
+        }
+
+        return $vehicle;
+    }
+
+    /**
+     * Update an existing vehicle record from the Fleet Management edit form.
+     */
+    public function updateFleetVehicle(int $id, array $data): \stdClass
+    {
+        $now = \Carbon\Carbon::now();
+
+        $row = [
+            'VehicleLicense'    => strtoupper(trim($data['plate'])),
+            'VehicleType'       => strtolower($data['type']),
+            'MaxWeightCapacity' => (float) $data['max_weight'],
+            'MaxVolume'         => (float) $data['max_volume'],
+            'Current_odometer'  => (float) $data['odometer'],
+            'MarketValue'       => (int)   $data['market_value'],
+            'VehicleModel'      => $data['vehicle_model'],
+            'UpdatedAt'         => $now,
+        ];
+
+        $affected = \Illuminate\Support\Facades\DB::table('vehicles')
+            ->where('vehicle_id', $id)
+            ->update($row);
+
+        if ($affected === 0) {
+            // Check if it exists at all
+            $exists = \Illuminate\Support\Facades\DB::table('vehicles')->where('vehicle_id', $id)->exists();
+            if (!$exists) {
+                throw new \Exception("Vehicle with ID {$id} not found.", 404);
+            }
+        }
+
+        return $this->getFleetVehicleDetail($id);
+    }
+
+    /**
+     * Fetch a single vehicle row by primary key for the detail modal.
+     * Returns a raw stdClass so VehicleDetailResource can access all SQL Server
+     * columns by their exact names without Eloquent attribute aliasing.
+     *
+     * @throws \Exception  If the vehicle_id does not exist.
+     */
+    public function getFleetVehicleDetail(int $vehicleId): \stdClass
+    {
+        $vehicle = \Illuminate\Support\Facades\DB::table('vehicles')
+            ->where('vehicle_id', $vehicleId)
+            ->first();
+
+        if (! $vehicle) {
+            throw new \Exception("Vehicle with ID {$vehicleId} not found.", 404);
+        }
+
+        return $vehicle;
+    }
+
     public function getMaintenanceVehicles(): array
     {
         try {

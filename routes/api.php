@@ -25,4 +25,5 @@ Route::middleware('api')->group(function (): void {
     });
 
     // API routes will be registered here.
+    Route::get('/v1/vehicles', [\App\Modules\RouteDispatch\Controllers\VehicleController::class, 'index']);
 });

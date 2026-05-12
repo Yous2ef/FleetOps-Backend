@@ -53,6 +53,7 @@ class OrderImportService
         $imported = 0;
         $errors = [];
         $rowNumber = 1;
+        $createdOrders = [];
 
         while (($data = fgetcsv($handle)) !== false) {
             $rowNumber++;
@@ -111,7 +112,15 @@ class OrderImportService
                 ];
 
                 // 3. Save
-                $this->orderRepository->create($orderData);
+                $order = clone $this->orderRepository->create($orderData);
+                
+                // Trigger tracking token fallback
+                if (empty($order->LiveTrackingLink)) {
+                    $order->LiveTrackingLink = bin2hex(random_bytes(16));
+                    $order->save();
+                }
+
+                $createdOrders[] = $order;
                 $imported++;
 
             } catch (Exception $e) {
@@ -124,7 +133,8 @@ class OrderImportService
         return [
             'imported' => $imported,
             'errors'   => $errors,
-            'batch_id' => uniqid('batch_')
+            'batch_id' => uniqid('batch_'),
+            'orders'   => \App\Modules\OrderManagement\Resources\OrderResource::collection($createdOrders)
         ];
     }
 
