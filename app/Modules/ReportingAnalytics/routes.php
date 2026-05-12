@@ -17,7 +17,7 @@ use App\Modules\ReportingAnalytics\Controllers\CashLedgerController;
 Route::prefix('api/v1/analytics')->middleware('auth:sanctum')->group(function () {
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Analytics Page Endpoints 
+    // Analytics Page Endpoints
     // ══════════════════════════════════════════════════════════════════════════
 
     // GET /api/v1/analytics/analytics-kpis?range=today|7d|30d
@@ -34,6 +34,24 @@ Route::prefix('api/v1/analytics')->middleware('auth:sanctum')->group(function ()
 
     // GET /api/v1/analytics/analytics-maintenance-cost?period_start=&period_end=
     Route::get('/analytics-maintenance-cost',  [ReportController::class, 'maintenanceCost'])->name('analytics.maintenance-cost');
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fuel & Efficiency Page (Fuel Efficiency frontend page)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    Route::prefix('fuel')->group(function () {
+        // GET  /api/v1/analytics/fuel/audit?period_start=YYYY-MM-DD&period_end=YYYY-MM-DD
+        Route::get('/audit',      [FuelController::class, 'audit'])->name('analytics.fuel.audit');
+
+        // GET  /api/v1/analytics/fuel/efficiency?period_start=YYYY-MM-DD&period_end=YYYY-MM-DD
+        Route::get('/efficiency', [FuelController::class, 'efficiency'])->name('analytics.fuel.efficiency');
+
+        // POST /api/v1/analytics/fuel/invoices  — add a fuel invoice
+        Route::post('/invoices',  [FuelController::class, 'storeInvoice'])->name('analytics.fuel.invoices.store');
+
+        // GET  /api/v1/analytics/fuel/export?tab=audit|efficiency&period_start=...&period_end=...
+        Route::get('/export',     [FuelController::class, 'export'])->name('analytics.fuel.export');
+    });
 
     // ══════════════════════════════════════════════════════════════════════════
     // KPIs & Metrics (AN-01/02/03/04/07)
@@ -70,7 +88,7 @@ Route::prefix('api/v1/analytics')->middleware('auth:sanctum')->group(function ()
         // POST /api/v1/analytics/reports/export  (AN-06 / fn42)
         Route::post('/export',           [ReportController::class, 'export'])->name('analytics.reports.export');
 
-        // POST /api/v1/analytics/reports/incidents-reports 
+        // POST /api/v1/analytics/reports/incidents-reports
         Route::post('/incidents-reports', [incidentReportController::class, 'createIncidentReport'])->name('analytics.reports.incidents-reports');
     });
 
@@ -83,3 +101,4 @@ Route::prefix('api/v1/analytics')->middleware('auth:sanctum')->group(function ()
         Route::post('/submit', [CashLedgerController::class, 'submitReconciliation'])->name('analytics.reconciliation.submit');
     });
 });
+

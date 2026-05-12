@@ -60,12 +60,17 @@ class FuelService
         $fuelAgg = $this->fuelRepo->aggregateByVehicle($periodStart, $periodEnd)->keyBy('vehicle_id');
 
         // 2. Aggregate GPS distance per vehicle from completed routes in the period
-        $gpsDistances = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
-            ->whereBetween('actual_start_time', [$periodStart . ' 00:00:00', $periodEnd . ' 23:59:59'])
-            ->whereNotNull('total_distance')
-            ->groupBy('vehicle_id')
-            ->get()
-            ->keyBy('vehicle_id');
+        try {
+            $gpsDistances = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
+                ->whereBetween('actual_start_time', [$periodStart . ' 00:00:00', $periodEnd . ' 23:59:59'])
+                ->whereNotNull('total_distance')
+                ->groupBy('vehicle_id')
+                ->get()
+                ->keyBy('vehicle_id');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[FuelService] GPS distance query failed: ' . $e->getMessage());
+            $gpsDistances = collect();
+        }
 
         // 3. Load vehicle info for all relevant vehicle IDs
         $vehicleIds = $fuelAgg->keys()->merge($gpsDistances->keys())->unique()->values()->all();
@@ -180,22 +185,32 @@ class FuelService
         $currentAgg = $this->fuelRepo->aggregateByVehicle($periodStart, $periodEnd)->keyBy('vehicle_id');
 
         // GPS distance for current period
-        $currentGps = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
-            ->whereBetween('actual_start_time', [$periodStart . ' 00:00:00', $periodEnd . ' 23:59:59'])
-            ->whereNotNull('total_distance')
-            ->groupBy('vehicle_id')
-            ->get()
-            ->keyBy('vehicle_id');
+        try {
+            $currentGps = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
+                ->whereBetween('actual_start_time', [$periodStart . ' 00:00:00', $periodEnd . ' 23:59:59'])
+                ->whereNotNull('total_distance')
+                ->groupBy('vehicle_id')
+                ->get()
+                ->keyBy('vehicle_id');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[FuelService] GPS current query failed: ' . $e->getMessage());
+            $currentGps = collect();
+        }
 
         // Previous period (same length) for trend calculation
         [$prevStart, $prevEnd] = $this->previousPeriod($periodStart, $periodEnd);
         $prevAgg = $this->fuelRepo->aggregateByVehicle($prevStart, $prevEnd)->keyBy('vehicle_id');
-        $prevGps = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
-            ->whereBetween('actual_start_time', [$prevStart . ' 00:00:00', $prevEnd . ' 23:59:59'])
-            ->whereNotNull('total_distance')
-            ->groupBy('vehicle_id')
-            ->get()
-            ->keyBy('vehicle_id');
+        try {
+            $prevGps = Route::select('vehicle_id', DB::raw('SUM(total_distance) AS gps_distance_km'))
+                ->whereBetween('actual_start_time', [$prevStart . ' 00:00:00', $prevEnd . ' 23:59:59'])
+                ->whereNotNull('total_distance')
+                ->groupBy('vehicle_id')
+                ->get()
+                ->keyBy('vehicle_id');
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[FuelService] GPS prev query failed: ' . $e->getMessage());
+            $prevGps = collect();
+        }
 
         // Vehicle info
         $vehicleIds = $currentAgg->keys()->merge($currentGps->keys())->unique()->values()->all();
