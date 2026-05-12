@@ -27,7 +27,56 @@ class VehicleController extends Controller
     /** GET /api/v1/dispatch/vehicles */
     public function index(): JsonResponse
     {
-        // TODO: return paginated vehicles list
+        try {
+            $perPage = (int) request()->query('per_page', 0);
+
+            if ($perPage > 0) {
+                $paginated = $this->vehicleService->getAllVehicles($perPage);
+                $mapped = collect($paginated->items())->map(fn($v) => $this->mapVehicle($v));
+
+                return response()->json([
+                    'success'      => true,
+                    'data'         => $mapped,
+                    'total'        => $paginated->total(),
+                    'per_page'     => $paginated->perPage(),
+                    'current_page' => $paginated->currentPage(),
+                    'last_page'    => $paginated->lastPage(),
+                ], 200);
+            }
+
+            $vehicles = \App\Modules\RouteDispatch\Models\Vehicle::all();
+            $mapped = $vehicles->map(fn($v) => $this->mapVehicle($v))->values();
+
+            return response()->json([
+                'success' => true,
+                'data'    => $mapped,
+                'total'   => $mapped->count(),
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Maps a Vehicle Eloquent model to the standard API response shape.
+     */
+    private function mapVehicle(\App\Modules\RouteDispatch\Models\Vehicle $vehicle): array
+    {
+        return [
+            'vehicle_id'   => (int)    $vehicle->vehicle_id,
+            'model'        => (string) ($vehicle->VehicleModel   ?? ''),
+            'type'         => (string) ($vehicle->VehicleType    ?? ''),
+            'plate_number' => (string) ($vehicle->VehicleLicense ?? ''),
+            'status'       => (string) ($vehicle->Status         ?? ''),
+            'odometer'     => (string) ($vehicle->Current_odometer ?? '0'),
+            'max_weight'   => (string) ($vehicle->MaxWeightCapacity ?? '0'),
+            'max_volume'   => (string) ($vehicle->MaxVolume      ?? '0'),
+            'market_value' => (int)    ($vehicle->MarketValue    ?? 0),
+        ];
     }
 
     /** GET /api/v1/dispatch/vehicles/{id} */

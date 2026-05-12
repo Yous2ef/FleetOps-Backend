@@ -14,14 +14,12 @@ class ProofOfDeliveryRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'driver_id'       => 'required|integer',
-            'lat'             => 'required|numeric',
-            'lng'             => 'required|numeric',
-            'signature'       => 'nullable|string',
-            'photo'           => 'nullable|string',
-            'customer_name'   => 'nullable|string',
-            'customer_signed' => 'nullable|boolean',
-            'is_safe_drop'    => 'nullable|boolean',
+            'digital_signature' => 'nullable|string',
+            'customer_name'     => 'nullable|string',
+            'geolocation'       => 'nullable|array',
+            'geolocation.lat'   => 'nullable|numeric',
+            'geolocation.lng'   => 'nullable|numeric',
+            'timestamp'         => 'nullable|string',
         ];
     }
 }

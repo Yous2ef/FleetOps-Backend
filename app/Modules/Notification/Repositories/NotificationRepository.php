@@ -30,10 +30,7 @@ class NotificationRepository extends BaseRepository
      */
     public function getForUser(int $userId, int $perPage = 15): LengthAwarePaginator
     {
-        return $this->model
-            ->forUser($userId)
-            ->latest()
-            ->paginate($perPage);
+        return $this->model->forUser($userId)->latest()->paginate($perPage);
     }
 
     /**

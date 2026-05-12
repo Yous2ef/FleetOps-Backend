@@ -16,28 +16,28 @@ class DriverPerformanceScore extends Model
 {
     use HasFactory;
 
-    protected $table = 'driver_performance_scores';
-    protected $primaryKey = 'score_id';
+    protected $table = 'driver_performance';
+    protected $primaryKey = 'performance_id';
     public $incrementing = true;
 
     protected $fillable = [
         'driver_id',
         'period_start',
         'period_end',
-        'on_time_rate',         // % of deliveries on time (weight A)
-        'fuel_efficiency_score', // normalized score (weight B)
-        'customer_rating_avg',  // avg from feedback (weight C)
-        'composite_score',      // final weighted score 0-100
+        'punctuality_rate',
+        'fuel_efficiency',
+        'customer_rating',
+        'performance_score',
         'total_deliveries',
         'successful_deliveries',
-        'breakdown',            // JSON with detailed metrics
+        'breakdown',
     ];
 
     protected $casts = [
-        'on_time_rate'           => 'float',
-        'fuel_efficiency_score'  => 'float',
-        'customer_rating_avg'    => 'float',
-        'composite_score'        => 'float',
+        'punctuality_rate'       => 'float',
+        'fuel_efficiency'        => 'float',
+        'customer_rating'        => 'float',
+        'performance_score'      => 'float',
         'total_deliveries'       => 'integer',
         'successful_deliveries'  => 'integer',
         'breakdown'              => 'array',
