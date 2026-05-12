@@ -89,7 +89,9 @@ class OrderService
                 ? (int) ($data['cod_amount'] ?? 0)
                 : 0;
 
+            $orderId = rand(1000000, 9999999);
             $order = Order::create([
+                'OrderID' => $orderId, // Manual ID for SQL Server
                 'CustomerID(FK)' => $user->user_id,
                 'Status' => 'Pending',
                 'Priority' => $priority,
@@ -107,10 +109,8 @@ class OrderService
                 'Longitude' => $data['lng'],
                 'Latitude' => $data['lat'],
                 'Area' => $data['delivery_address'],
+                'LiveTrackingLink' => 'http://fleetops.com/track/' . $orderId,
             ]);
-
-            $order->LiveTrackingLink = 'http://fleetops.com/track/' . $order->OrderID;
-            $order->save();
 
             return $order->load(['customer.user', 'vehicle', 'driver.user']);
         });

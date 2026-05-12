@@ -31,91 +31,147 @@ class OrderImportService
     public function importOrders(UploadedFile $file, string $format): array
     {
         if ($format !== 'csv') {
-            throw new Exception("Only CSV format is supported in this simple implementation.");
+            throw new Exception("Only CSV format is supported at the moment.");
         }
 
         $path = $file->getRealPath();
         $handle = fopen($path, 'r');
         if (!$handle) {
-            throw new Exception("Could not open file.");
+            throw new Exception("Could not open the uploaded file.");
         }
 
-        // Read first row as headers
+        // 1. Read and clean headers
         $headers = fgetcsv($handle);
         if (!$headers) {
             fclose($handle);
-            throw new Exception("Empty CSV file.");
+            throw new Exception("The CSV file appears to be empty.");
         }
 
-        // Clean headers and make them lower case for easier matching
+        // Clean BOM and trim headers
         $headers = array_map(fn($h) => strtolower(trim($h, "\xEF\xBB\xBF ")), $headers);
 
         $imported = 0;
         $errors = [];
         $rowNumber = 1;
 
+        // 2. Define expected column mappings (Aligned with your image)
+        $mapping = [
+            'customer_name'       => ['customer', 'customer name', 'customer_name'],
+            'customer_phone'      => ['customer_phone', 'phone', 'mobile'],
+            'status'              => ['status'],
+            'type'                => ['type'],
+            'price'               => ['price'],
+            'delivery_preference' => ['delivery_preference', 'delivery preference'],
+            'payment_method'      => ['payment_method', 'payment method', 'payment'],
+            'perishable'          => ['perishable'],
+            'weight'              => ['weight'],
+            'volume'              => ['volume'],
+            'delivery_time_window' => ['deliverytimewindow', 'delivery time window'],
+            'longitude'           => ['longitude', 'lng'],
+            'latitude'            => ['latitude', 'lat'],
+            'area'                => ['area', 'delivery_address', 'address'],
+        ];
+
         while (($data = fgetcsv($handle)) !== false) {
             $rowNumber++;
             
-            // Skip empty rows
-            if (empty(array_filter($data))) {
-                continue;
-            }
+            if (empty(array_filter($data))) continue;
 
-            // Basic check: column count must match
             if (count($headers) !== count($data)) {
-                $errors[] = "Row $rowNumber: Column count mismatch (expected " . count($headers) . " columns).";
+                $errors[] = "Row $rowNumber: Column mismatch (Headers: " . count($headers) . ", Data: " . count($data) . ")";
                 continue;
             }
 
-            // Trim all data values
-            $data = array_map('trim', $data);
-            $row = array_combine($headers, $data);
+            $rawRow = array_combine($headers, array_map('trim', $data));
             
+            // Map the CSV data to our internal format
+            $mappedData = [];
+            foreach ($mapping as $internalKey => $aliases) {
+                foreach ($aliases as $alias) {
+                    $aliasLower = strtolower($alias);
+                    if (isset($rawRow[$aliasLower])) {
+                        $mappedData[$internalKey] = $rawRow[$aliasLower];
+                        break;
+                    }
+                }
+            }
+
+            // 3. Data Validation
+            $validator = \Illuminate\Support\Facades\Validator::make($mappedData, [
+                'customer_name'  => 'required|string|max:255',
+                'customer_phone' => 'required|string|max:20',
+                'area'           => 'required|string|max:500',
+                'latitude'       => 'required|numeric',
+                'longitude'      => 'required|numeric',
+                'weight'         => 'required|numeric|min:0',
+            ]);
+
+            if ($validator->fails()) {
+                $errors[] = "Row $rowNumber Validation: " . implode(', ', $validator->errors()->all());
+                continue;
+            }
+
             try {
-                // Mapping (Simplified)
-                // 1. Find Customer
-                $customerName = $row['customer name'] ?? $row['customer_name'] ?? $row['customer'] ?? null;
-                if (!$customerName) {
-                    $errors[] = "Row $rowNumber: Customer Name is missing (tried 'customer name', 'customer_name', 'customer').";
-                    continue;
-                }
+                \Illuminate\Support\Facades\DB::transaction(function () use ($mappedData, &$imported) {
+                    // 4. Handle Customer/User Creation
+                    $email = 'cust.' . \Illuminate\Support\Str::slug($mappedData['customer_name']) . '.' . rand(100,999) . '@fleetops.local';
 
-                $user = \App\Modules\AuthIdentity\Models\User::where('name', $customerName)->first();
-                
-                // If customer not found, create a new one on the fly
-                if (!$user) {
-                    $user = \App\Modules\AuthIdentity\Models\User::create([
-                        'name'     => $customerName,
-                        'email'    => strtolower(str_replace(' ', '.', $customerName)) . '@example.com', // Placeholder email
-                        'password' => bcrypt('password123'), // Default password
-                        'role'     => 'Customer',
-                    ]);
-                }
+                    $user = \App\Modules\AuthIdentity\Models\User::firstOrCreate(
+                        ['phone_no' => $mappedData['customer_phone']], // Match by phone if possible
+                        [
+                            'name'      => $mappedData['customer_name'],
+                            'email'     => $email,
+                            'password'  => \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(12)),
+                            'role'      => 'Customer',
+                            'is_active' => true,
+                        ]
+                    );
 
-                // 2. Prepare Order Data
-                $orderData = [
-                    'OrderID'             => rand(100000, 999999), // Generate a random unique ID for now
-                    'CustomerID(FK)'      => $user->user_id,
-                    'Status'              => $row['status'] ?? 'Pending',
-                    'Type'                => $row['type'] ?? 'Normal',
-                    'Price'               => (int) ($row['price'] ?? 0),
-                    'Payment_method'      => $row['payment method'] ?? $row['payment_method'] ?? $row['payment_r'] ?? 'Cash',
-                    'Area'                => $row['area'] ?? 'Cairo',
-                    'Weight'              => !empty($row['weight']) ? (int)$row['weight'] : null,
-                    'Volume'              => !empty($row['volume']) ? (int)$row['volume'] : null,
-                    'Latitude'            => !empty($row['latitude']) ? (float)$row['latitude'] : null,
-                    'Longitude'           => !empty($row['longitude']) ? (float)$row['longitude'] : null,
-                    'Perishable'          => (isset($row['perishable']) && strtoupper($row['perishable']) === 'TRUE'),
-                    'Delivery_preference' => $row['delivery_preference'] ?? null,
-                ];
+                    // Ensure Customer profile exists
+                    \App\Modules\AuthIdentity\Models\Customer::updateOrCreate(
+                        ['customer_id' => $user->user_id],
+                        [
+                            'address' => $mappedData['area'],
+                            'delivery_preference' => $mappedData['delivery_preference'] ?? null
+                        ]
+                    );
 
-                // 3. Save
-                $this->orderRepository->create($orderData);
-                $imported++;
+                    // 5. Prepare Order Record (Aligned with Image Columns)
+                    $orderId = rand(1000000, 9999999);
+                    $deliveryWindow = $mappedData['delivery_time_window'] ?? null;
+                    if ($deliveryWindow) {
+                        // Remove colons and other non-numeric chars except the decimal point
+                        $deliveryWindow = preg_replace('/[^0-9.]/', '', str_replace(':', '.', $deliveryWindow));
+                    }
+
+                    $orderData = [
+                        'OrderID'             => $orderId, 
+                        'CustomerID(FK)'      => $user->user_id,
+                        'Status'              => $mappedData['status'] ?? 'Pending',
+                        'Type'                => $mappedData['type'] ?? 'Normal',
+                        'Priority'            => (strtoupper($mappedData['type'] ?? '') === 'EXPRESS') ? 80 : 40,
+                        'Price'               => (int)($mappedData['price'] ?? 0),
+                        'Payment_method'      => $mappedData['payment_method'] ?? 'Cash',
+                        'Area'                => $mappedData['area'],
+                        'Weight'              => (int)$mappedData['weight'],
+                        'Volume'              => (int)($mappedData['volume'] ?? 0),
+                        'Latitude'            => $mappedData['latitude'],
+                        'Longitude'           => $mappedData['longitude'],
+                        'Perishable'          => (isset($mappedData['perishable']) && strtoupper($mappedData['perishable']) === 'TRUE'),
+                        'DeliveryTimeWindow'  => $deliveryWindow ? (float)$deliveryWindow : null,
+                        'Delivery_preference' => $mappedData['delivery_preference'] ?? null,
+                        'digital_signature'   => strtoupper(\Illuminate\Support\Str::random(10)),
+                        'LiveTrackingLink'    => 'http://fleetops.com/track/' . $orderId,
+                        'Created_at'          => now(),
+                        'UpdatedAt'           => now(),
+                    ];
+
+                    $this->orderRepository->create($orderData);
+                    $imported++;
+                });
 
             } catch (Exception $e) {
-                $errors[] = "Row $rowNumber: " . $e->getMessage();
+                $errors[] = "Row $rowNumber Error: " . $e->getMessage();
             }
         }
 
@@ -126,32 +182,6 @@ class OrderImportService
             'errors'   => $errors,
             'batch_id' => uniqid('batch_')
         ];
-    }
-
-    /**
-     * التحقق من Schema ملف CSV (OM-01)
-     * @param array $headers  CSV header row
-     * @return array  missing columns
-     */
-    protected function validateCsvSchema(array $headers): array
-    {
-        // TODO: Return list of missing required columns
-        // return array_diff($this->requiredColumns, $headers);
-        return [];
-    }
-
-    /**
-     * التحقق من بيانات صف واحد
-     * @param array $row
-     * @param int $rowNumber
-     * @return array  validation errors for this row
-     */
-    protected function validateRow(array $row, int $rowNumber): array
-    {
-        // TODO: Validate single row data
-        // Check: lat/lng are valid numbers, payment_type in allowed values, weight_kg > 0
-        // Return errors array (empty if valid)
-        return [];
     }
 }
 
