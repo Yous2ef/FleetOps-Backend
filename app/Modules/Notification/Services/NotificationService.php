@@ -24,6 +24,16 @@ class NotificationService
     }
 
     /**
+     * جلب إشعارات المستخدم
+     * @param int $userId
+     * @param int $perPage
+     */
+    public function getUserNotifications(int $userId, int $perPage = 15)
+    {
+        return $this->notificationRepository->getForUser($userId, $perPage);
+    }
+
+    /**
      * إرسال إشعار عبر القناة المناسبة مع Fallback (NF-01)
      * @param int $userId
      * @param string $eventType  (proximity_alert | delay_alert | status_update | maintenance_alert)

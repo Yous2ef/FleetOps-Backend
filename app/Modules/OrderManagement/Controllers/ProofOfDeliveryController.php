@@ -13,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\OrderManagement\Requests\ProofOfDeliveryRequest;
 use App\Modules\OrderManagement\Services\ProofOfDeliveryService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 
 class ProofOfDeliveryController extends Controller
 {
@@ -30,18 +31,22 @@ class ProofOfDeliveryController extends Controller
     public function store(int $orderId, ProofOfDeliveryRequest $request): JsonResponse
     {
         try {
-            $pod = $this->podService->storePOD($orderId, $request->validated());
+            $this->podService->storePOD($orderId, $request->validated());
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم تسجيل إثبات التسليم بنجاح',
-                'data' => $pod
-            ], 201);
+                'message' => 'Delivery proof saved successfully.'
+            ], 200);
         } catch (\Exception $e) {
+            Log::error("POD Store Failure for Order {$orderId}: " . $e->getMessage(), [
+                'exception' => $e,
+                'payload' => $request->all()
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage()
-            ], 400);
+                'message' => 'An error occurred while saving delivery proof.'
+            ], 500);
         }
     }
 

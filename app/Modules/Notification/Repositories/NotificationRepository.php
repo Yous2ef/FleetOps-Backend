@@ -21,7 +21,7 @@ class NotificationRepository extends BaseRepository
 
     public function getForUser(int $userId, int $perPage = 15)
     {
-        // TODO: return $this->model->forUser($userId)->latest()->paginate($perPage);
+        return $this->model->forUser($userId)->latest()->paginate($perPage);
     }
 
     public function findByDedupKey(string $dedupKey): ?Notification

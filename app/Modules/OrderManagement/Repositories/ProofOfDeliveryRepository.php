@@ -42,4 +42,10 @@ class ProofOfDeliveryRepository extends BaseRepository
             ->whereDate('delivered_at', $date)
             ->get();
     }
+
+    public function storePOD(array $data)
+    {
+        return $this->model->create($data);
+    }   
 }
+
