@@ -40,9 +40,10 @@ class DispatchController extends Controller
      */
     public function liveSnapshot(): JsonResponse
     {
-        // 1. Get all active routes
+        // 1. Get routes that are actually in motion.
+        // Planned routes/orders are still being prepared and should not appear on the live map.
         $routes = Route::with(['driver.user', 'vehicle', 'stops'])
-            ->whereIn('status', ['Planned', 'Active', 'InProgress', 'In_progress'])
+            ->whereIn('status', ['Active', 'InProgress', 'In_progress'])
             ->orderBy('created_at', 'desc')
             ->get();
 

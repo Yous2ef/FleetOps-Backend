@@ -1,16 +1,8 @@
 <?php
 
-/**
- * @file: SparePartService.php
- * @description: خدمة مخزون قطع الغيار - Maintenance Service (MT-05 / fn31)
- * @module: Maintenance
- * @author: Team Leader (Khalid)
- */
-
 namespace App\Modules\Maintenance\Services;
 
 use App\Modules\Maintenance\Repositories\SparePartRepository;
-use Exception;
 
 class SparePartService
 {
@@ -21,40 +13,45 @@ class SparePartService
         $this->sparePartRepository = $sparePartRepository;
     }
 
-    public function getAllParts(int $perPage = 15)
+    public function getAllParts()
     {
-        // TODO: return $this->sparePartRepository->paginate($perPage);
+        // التعديل هنا: استخدام getAll() بدلاً من all()
+        return $this->sparePartRepository->getAll();
     }
 
     public function getPartById(int $id)
     {
-        // TODO: return $this->sparePartRepository->findByIdOrFail($id);
+        return $this->sparePartRepository->findById($id);
     }
 
     public function createPart(array $data)
     {
-        // TODO: return $this->sparePartRepository->create($data);
+        return $this->sparePartRepository->create($data);
     }
 
     public function updatePart(int $id, array $data)
     {
-        // TODO: update and return part
+        $this->sparePartRepository->update($id, $data);
+        return $this->sparePartRepository->findById($id); // عشان نرجع الداتا متحدثة
     }
 
     public function deletePart(int $id): bool
     {
-        // TODO: return $this->sparePartRepository->delete($id);
+        return $this->sparePartRepository->delete($id);
     }
 
     public function getLowStockParts()
     {
-        // TODO: return $this->sparePartRepository->getLowStockParts();
+        return $this->sparePartRepository->getLowStockParts();
     }
 
     public function adjustStock(int $partId, int $quantity, string $operation): bool
     {
-        // TODO: Adjust stock (add or deduct)
-        // If $operation === 'add': $this->sparePartRepository->addStock($partId, $quantity)
-        // If $operation === 'deduct': $this->sparePartRepository->deductStock($partId, $quantity)
+        if ($operation === 'add') {
+            return $this->sparePartRepository->addStock($partId, $quantity);
+        } elseif ($operation === 'deduct') {
+            return $this->sparePartRepository->deductStock($partId, $quantity);
+        }
+        return false;
     }
 }

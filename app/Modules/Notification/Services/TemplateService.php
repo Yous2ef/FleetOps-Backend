@@ -12,8 +12,8 @@ namespace App\Modules\Notification\Services;
 class TemplateService
 {
     /**
-     * قوالب الإشعارات متعددة اللغات (NF-04)
-     * المفتاح = event_type، القيمة = رسالة للغة
+     * Bilingual notification templates keyed by event_type.
+     * Variables use the :variable_name syntax (replaced at build time).
      */
     protected array $templates = [
         'proximity_alert' => [
@@ -36,49 +36,91 @@ class TemplateService
             'ar' => 'لم نتمكن من تسليم طلبك رقم :order_id وسيتم إعادة المحاولة.',
             'en' => 'We could not deliver order #:order_id and will retry.',
         ],
+        'status_update' => [
+            'ar' => 'تم تحديث حالة الطلب رقم :order_id.',
+            'en' => 'Order #:order_id status has been updated.',
+        ],
         'maintenance_alert_odometer' => [
             'ar' => 'المركبة :plate_number وصلت لعداد الصيانة (:odometer كم). يُرجى جدولة صيانة.',
             'en' => 'Vehicle :plate_number has reached maintenance odometer (:odometer km). Please schedule maintenance.',
+        ],
+        'maintenance_alert_inspection' => [
+            'ar' => 'تنبيه: انتهاء التأمين أو الفحص السنوي للمركبة :plate_number خلال 30 يوماً.',
+            'en' => 'Alert: Insurance or annual inspection for vehicle :plate_number expires within 30 days.',
+        ],
+        'maintenance_alert' => [
+            'ar' => 'تنبيه صيانة للمركبة :plate_number — :description',
+            'en' => 'Maintenance alert for vehicle :plate_number — :description',
         ],
         'low_stock_alert' => [
             'ar' => 'مخزون :part_name وصل للحد الأدنى (:quantity :unit). يُرجى إعادة الطلب.',
             'en' => 'Stock for :part_name has reached minimum (:quantity :unit). Please reorder.',
         ],
+        'incident_alert' => [
+            'ar' => 'تم الإبلاغ عن حادث للمركبة :plate_number. الموقع: :location',
+            'en' => 'An incident has been reported for vehicle :plate_number. Location: :location',
+        ],
+        'route_started' => [
+            'ar' => 'تم بدء المسار :route_id. السائق :driver_name في الطريق.',
+            'en' => 'Route :route_id has started. Driver :driver_name is on the way.',
+        ],
+        'shift_transfer' => [
+            'ar' => 'تم نقل مسارك إلى السائق :driver_name. يُرجى المراجعة.',
+            'en' => 'Your route has been transferred to driver :driver_name. Please review.',
+        ],
     ];
 
     /**
-     * بناء رسالة الإشعار من القالب مع الـ Variables (NF-04)
-     * @param string $eventType
-     * @param string $language  ('ar' | 'en')
-     * @param array $variables   [':eta' => '15:30', ':order_id' => '12345']
-     * @return string
+     * Build a notification message from its template with variable substitution.
+     *
+     * @param string $eventType  The event type key (must match $templates keys)
+     * @param string $language   'ar' or 'en' — falls back to 'ar' if language missing
+     * @param array  $variables  Key-value pairs like [':eta' => '15:30', ':order_id' => '1001']
+     * @return string            The final rendered message string
+     *
+     * @example
+     *   $msg = $templateService->buildMessage('delay_alert', 'en', [':eta' => '16:45']);
+     *   // → "We apologize for the delay. Expected delivery time: 16:45"
      */
     public function buildMessage(string $eventType, string $language = 'ar', array $variables = []): string
     {
-        // TODO: Build notification message from template
-        // 1. Get template: $template = $this->templates[$eventType][$language] ?? $this->templates[$eventType]['ar']
-        // 2. Replace variables: foreach ($variables as $key => $value) { $template = str_replace($key, $value, $template) }
-        // 3. Return filled template string
+        // Resolve template — fall back to 'ar' if the requested language is missing
+        $template = $this->templates[$eventType][$language]
+            ?? $this->templates[$eventType]['ar']
+            ?? "Notification: {$eventType}";
+
+        // Replace all :variable_name placeholders
+        if (!empty($variables)) {
+            $template = str_replace(
+                array_keys($variables),
+                array_values($variables),
+                $template
+            );
+        }
+
+        return $template;
     }
 
     /**
-     * جلب قالب معين
+     * Get the raw template string for a given event type and language.
+     *
      * @param string $eventType
      * @param string $language
-     * @return string|null
+     * @return string|null  null if the event type is not defined
      */
     public function getTemplate(string $eventType, string $language = 'ar'): ?string
     {
-        // TODO: return $this->templates[$eventType][$language] ?? null;
+        return $this->templates[$eventType][$language] ?? null;
     }
 
     /**
-     * التحقق من أن نوع الحدث له قالب
+     * Check whether a template exists for the given event type.
+     *
      * @param string $eventType
      * @return bool
      */
     public function hasTemplate(string $eventType): bool
     {
-        // TODO: return isset($this->templates[$eventType]);
+        return isset($this->templates[$eventType]);
     }
 }

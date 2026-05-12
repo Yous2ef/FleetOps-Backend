@@ -10,128 +10,214 @@
 namespace App\Modules\Notification\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Notification\Services\NotificationService;
+use App\Modules\Notification\Models\NotificationPreference;
+use App\Modules\Notification\Repositories\NotificationRepository;
+use App\Modules\Notification\Repositories\NotificationPreferenceRepository;
+use App\Modules\Notification\Requests\NotificationPreferenceRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class NotificationController extends Controller
 {
-    protected NotificationService $notificationService;
+    protected NotificationRepository $notificationRepository;
+    protected NotificationPreferenceRepository $preferenceRepository;
 
-    public function __construct(NotificationService $notificationService)
-    {
-        $this->notificationService = $notificationService;
+    public function __construct(
+        NotificationRepository $notificationRepository,
+        NotificationPreferenceRepository $preferenceRepository
+    ) {
+        $this->notificationRepository = $notificationRepository;
+        $this->preferenceRepository   = $preferenceRepository;
     }
 
     /**
-     * جلب إشعارات المستخدم الحالي
+     * Get paginated notifications for the authenticated user.
      * GET /api/v1/notifications
+     *
+     * @queryParam per_page int Number of items per page (default: 20)
      */
     public function index(Request $request): JsonResponse
     {
         try {
-            // Seed data if empty
-            if (\App\Modules\Notification\Models\Notification::count() === 0) {
-                $firstUser = \App\Modules\AuthIdentity\Models\User::first();
-                $userId = $request->user() ? $request->user()->user_id : ($firstUser ? $firstUser->user_id : 1);
-                
-                $dummies = [
-                    [
-                        'user_id' => $userId,
-                        'channel' => 'push',
-                        'event_type' => 'status_update',
-                        'payload' => json_encode([
-                            'title' => 'Route Started', 
-                            'body' => 'Your route R-001 has been started.',
-                            'description' => 'The system has successfully dispatched vehicle V-101 for route R-001. All stops have been synchronized to the driver app.'
-                        ]),
-                        'status' => 'delivered',
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ],
-                    [
-                        'user_id' => $userId,
-                        'channel' => 'push',
-                        'event_type' => 'delay_alert',
-                        'payload' => json_encode([
-                            'title' => 'Traffic Delay', 
-                            'body' => 'Expect a 15 min delay on Route R-002.',
-                            'description' => 'Heavy traffic detected on the Ring Road near the 6th of October exit. Estimated time of arrival for Stop 3 has been adjusted.'
-                        ]),
-                        'status' => 'delivered',
-                        'created_at' => now()->subMinutes(30),
-                        'updated_at' => now()->subMinutes(30),
-                    ],
-                    [
-                        'user_id' => $userId,
-                        'channel' => 'push',
-                        'event_type' => 'maintenance_alert',
-                        'payload' => json_encode([
-                            'title' => 'Maintenance Required', 
-                            'body' => 'Vehicle V-101 needs oil change.',
-                            'description' => 'Predictive maintenance alert: Vehicle V-101 has reached 10,000 km since its last oil change. Please schedule a visit to the workshop.'
-                        ]),
-                        'status' => 'pending',
-                        'created_at' => now()->subHours(2),
-                        'updated_at' => now()->subHours(2),
-                    ],
-                ];
-                \App\Modules\Notification\Models\Notification::insert($dummies);
-            }
-
-            // Fetch notifications
+            $userId  = $request->user()->user_id;
             $perPage = (int) $request->input('per_page', 20);
-            $firstUser = \App\Modules\AuthIdentity\Models\User::first();
-            $userId = $request->user() ? $request->user()->user_id : ($firstUser ? $firstUser->user_id : 1);
-            
-            $notifications = \App\Modules\Notification\Models\Notification::where('user_id', $userId)
-                ->orderBy('created_at', 'desc')
-                ->paginate($perPage);
 
-            return response()->json(['success' => true, 'data' => $notifications]);
+            $notifications = $this->notificationRepository->getForUser($userId, $perPage);
+
+            return response()->json([
+                'success' => true,
+                'data'    => $notifications,
+            ]);
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('NotificationController::index Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            Log::error('NotificationController::index error', [
+                'message' => $e->getMessage(),
+                'user_id' => $request->user()?->user_id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve notifications.',
+            ], 500);
         }
     }
 
     /**
-     * عرض إشعار واحد
+     * Get a single notification by ID (must belong to the authenticated user).
      * GET /api/v1/notifications/{id}
      */
-    public function show(int $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
-        // TODO: return single notification (must belong to auth user)
+        try {
+            $userId       = $request->user()->user_id;
+            $notification = $this->notificationRepository->findById($id);
+
+            if (!$notification) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Notification not found.',
+                ], 404);
+            }
+
+            // Ownership check — prevent accessing other users' notifications
+            if ($notification->user_id !== $userId) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied.',
+                ], 403);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data'    => $notification,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('NotificationController::show error', [
+                'message'         => $e->getMessage(),
+                'notification_id' => $id,
+                'user_id'         => $request->user()?->user_id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve notification.',
+            ], 500);
+        }
     }
 
     /**
-     * تحديث تفضيلات الإشعارات (NF-02)
-     * PUT /api/v1/notifications/preferences
-     */
-    public function updatePreferences(Request $request): JsonResponse
-    {
-        // TODO: Update user notification preferences
-        // 1. Validate: push_enabled, sms_enabled, email_enabled, quiet_hours_start, quiet_hours_end, fcm_token
-        // 2. Upsert preferences for auth user
-        // 3. Return updated preferences
-    }
-
-    /**
-     * جلب تفضيلات الإشعارات
+     * Get notification preferences for the authenticated user.
+     * Returns system defaults if no preferences have been saved yet.
      * GET /api/v1/notifications/preferences
      */
     public function getPreferences(Request $request): JsonResponse
     {
-        // TODO: return auth user notification preferences
+        try {
+            $userId = $request->user()->user_id;
+            $pref   = $this->preferenceRepository->getForUser($userId);
+
+            // Return system defaults if the user has never set preferences
+            if (!$pref) {
+                $pref = new NotificationPreference([
+                    'user_id'            => $userId,
+                    'push_enabled'       => true,
+                    'sms_enabled'        => false,
+                    'email_enabled'      => true,
+                    'quiet_hours_start'  => null,
+                    'quiet_hours_end'    => null,
+                    'preferred_language' => 'en',
+                    'fcm_token'          => null,
+                ]);
+            }
+
+            return response()->json([
+                'success' => true,
+                'data'    => $pref,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('NotificationController::getPreferences error', [
+                'message' => $e->getMessage(),
+                'user_id' => $request->user()?->user_id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve preferences.',
+            ], 500);
+        }
     }
 
     /**
-     * تحديث FCM Token (للـ Push Notifications)
+     * Create or update notification preferences for the authenticated user.
+     * PUT /api/v1/notifications/preferences
+     *
+     * @bodyParam push_enabled       boolean
+     * @bodyParam sms_enabled        boolean
+     * @bodyParam email_enabled      boolean
+     * @bodyParam quiet_hours_start  string  HH:MM format
+     * @bodyParam quiet_hours_end    string  HH:MM format (must be after quiet_hours_start)
+     * @bodyParam preferred_language string  'ar' or 'en'
+     * @bodyParam fcm_token          string  Firebase Cloud Messaging device token
+     */
+    public function updatePreferences(NotificationPreferenceRequest $request): JsonResponse
+    {
+        try {
+            $userId     = $request->user()->user_id;
+            $validated  = $request->validated();
+
+            $pref = $this->preferenceRepository->upsertForUser($userId, $validated);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Preferences updated successfully.',
+                'data'    => $pref,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('NotificationController::updatePreferences error', [
+                'message' => $e->getMessage(),
+                'user_id' => $request->user()?->user_id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update preferences.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Update only the FCM token for the authenticated user's push notifications.
      * POST /api/v1/notifications/fcm-token
+     *
+     * @bodyParam fcm_token string required Firebase Cloud Messaging device token
      */
     public function updateFcmToken(Request $request): JsonResponse
     {
-        // TODO: Validate fcm_token and update in preferences
-        // $request->validate(['fcm_token' => 'required|string'])
+        try {
+            $request->validate([
+                'fcm_token' => 'required|string|max:512',
+            ]);
+
+            $userId = $request->user()->user_id;
+
+            $this->preferenceRepository->upsertForUser($userId, [
+                'fcm_token' => $request->input('fcm_token'),
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'FCM token updated successfully.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('NotificationController::updateFcmToken error', [
+                'message' => $e->getMessage(),
+                'user_id' => $request->user()?->user_id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update FCM token.',
+            ], 500);
+        }
     }
 }

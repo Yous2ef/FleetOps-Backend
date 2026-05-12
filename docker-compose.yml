@@ -4,13 +4,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: production
+      target: development
     container_name: fleetops-backend
     restart: unless-stopped
     working_dir: /var/www/html
     environment:
-      - APP_ENV=production
-      - APP_DEBUG=false
+      - APP_ENV=local
+      - APP_DEBUG=true
       - DB_CONNECTION=sqlsrv
       - DB_HOST=sqlserver
       - DB_PORT=1433

@@ -200,22 +200,22 @@ class KpiService
 
         $totalVehicles = DB::table('vehicles')->count();
 
-        $delivered = DB::table('order')->where('Status','delivered')
-            ->whereBetween('DeliveredAt',[$start,$end])->count();
+        $delivered = DB::table('order')->where('Status','Delivered')
+            ->where('DeliveredAt', '>=', $start)->count();
 
-        $prevDelivered = DB::table('order')->where('Status','delivered')
+        $prevDelivered = DB::table('order')->where('Status','Delivered')
             ->whereBetween('DeliveredAt',[$prevStart,$prevEnd])->count();
 
-        $lateDeliveries = DB::table('order')->where('Status', 'delivered')
-            ->whereBetween('DeliveredAt', [$start, $end])
+        $lateDeliveries = DB::table('order')->where('Status', 'Delivered')
+            ->where('DeliveredAt', '>=', $start)
             ->whereNotNull('PromisedWindow')
-            ->whereColumn('DeliveredAt', '>', 'PromisedWindow')
+            ->where('DeliveredAt', '>', DB::raw('DATEADD(hour, 6, PromisedWindow)'))
             ->count();
 
-        $prevLate = DB::table('order')->where('Status', 'delivered')
+        $prevLate = DB::table('order')->where('Status', 'Delivered')
             ->whereBetween('DeliveredAt', [$prevStart, $prevEnd])
             ->whereNotNull('PromisedWindow')
-            ->whereColumn('DeliveredAt', '>', 'PromisedWindow')
+            ->where('DeliveredAt', '>', DB::raw('DATEADD(hour, 6, PromisedWindow)'))
             ->count();
 
 
@@ -317,22 +317,25 @@ class KpiService
         }
         $end = $now->copy()->endOfDay();
 
-        // Actual fuel cost per vehicle from fuel_audit_logs
-        $actualPerVehicle = DB::table('fuel_audit_logs')
-            ->join('vehicles', 'fuel_audit_logs.vehicle_id', '=', 'vehicles.vehicle_id')
-            ->whereBetween('fuel_audit_logs.log_ts', [$start, $end])
-            ->select(
-                'vehicles.vehicle_id',
-                'vehicles.VehicleLicense',
-                'vehicles.VehicleType',
-                DB::raw('SUM(fuel_audit_logs.fuel_quantity) as actual_litres'),
-                DB::raw('SUM(fuel_audit_logs.total_cost)    as actual_invoice')
-            )
-            ->groupBy('vehicles.vehicle_id', 'vehicles.VehicleLicense', 'vehicles.VehicleType')
+        // 1. Get vehicle details for all vehicles to ensure we have license/type
+        $vehicleDetails = DB::table('vehicles')
+            ->select('vehicle_id', 'VehicleLicense as license', 'VehicleType as type')
             ->get()
             ->keyBy('vehicle_id');
 
-        // GPS distance & expected fuel from routes
+        // 2. Actual fuel cost per vehicle from fuel_audit_logs
+        $actualPerVehicle = DB::table('fuel_audit_logs')
+            ->whereBetween('log_ts', [$start, $end])
+            ->select(
+                'vehicle_id',
+                DB::raw('SUM(fuel_quantity) as actual_litres'),
+                DB::raw('SUM(fuel_quantity * unit_price) as actual_invoice')
+            )
+            ->groupBy('vehicle_id')
+            ->get()
+            ->keyBy('vehicle_id');
+
+        // 3. GPS distance & expected fuel from routes
         $expected = DB::table('routes')
             ->whereBetween('scheduled_start_time', [$start, $end])
             ->whereNotNull('fuel_consumption_est')
@@ -352,6 +355,7 @@ class KpiService
         foreach ($allVehicleIds as $vid) {
             $act = $actualPerVehicle[$vid] ?? null;
             $exp = $expected[$vid]         ?? null;
+            $det = $vehicleDetails[$vid]   ?? null;
 
             $gpsDistance   = $exp ? round($exp->gps_distance_km, 1) : 0;
             $expectedFuel  = $exp ? round($exp->expected_fuel, 2)   : 0;
@@ -365,11 +369,12 @@ class KpiService
 
             $rows[] = [
                 'vehicle_id'     => $vid,
-                'license'        => $act->VehicleLicense ?? 'N/A',
-                'type'           => $act->VehicleType    ?? 'N/A',
+                'license'        => $det->license ?? 'N/A',
+                'type'           => $det->type    ?? 'N/A',
                 'gps_distance'   => $gpsDistance,
                 'expected_fuel'  => $expectedFuel,
-                'actual_invoice' => $actualInvoice,
+                'actual_litres'  => $actualLitres,
+                'actual_invoice' => $actualInvoice . ' EGP',
                 'status'         => $status,
             ];
         }
@@ -379,7 +384,7 @@ class KpiService
             if ($a['status'] !== $b['status']) {
                 return $a['status'] === 'flagged' ? -1 : 1;
             }
-            return $b['actual_invoice'] <=> $a['actual_invoice'];
+            return (float)$b['actual_invoice'] <=> (float)$a['actual_invoice'];
         });
 
         return [
@@ -411,6 +416,19 @@ class KpiService
     {
         
         $now = Carbon::now();        
+        
+        if ($period === 'monthly') {
+            $curStart  = $now->copy()->startOfMonth();
+            $curEnd    = $now->copy()->endOfMonth();
+            $prevStart = $now->copy()->subMonth()->startOfMonth();
+            $prevEnd   = $now->copy()->subMonth()->endOfMonth();
+        } else {
+            // Default to last 30 days vs previous 30 days if period unknown
+            $curEnd    = $now->copy()->endOfDay();
+            $curStart  = $curEnd->copy()->subDays(30)->startOfDay();
+            $prevEnd   = $curStart->copy()->subSecond();
+            $prevStart = $prevEnd->copy()->subDays(30)->startOfDay();
+        }
 
         $factors = ['light' => 0.21, 'heavy' => 0.37, 'refrigerated' => 0.43];
 

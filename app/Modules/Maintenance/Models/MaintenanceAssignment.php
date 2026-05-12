@@ -35,6 +35,7 @@ class MaintenanceAssignment extends Model
         'vehicle_id',
         'fleet_manager_id',
         'mechanic_id',
+        'incident_id',
         'service_type',
         'priority',
         'status',

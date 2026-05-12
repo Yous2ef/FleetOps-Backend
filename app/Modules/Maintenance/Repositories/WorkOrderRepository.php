@@ -22,12 +22,12 @@ class WorkOrderRepository extends BaseRepository
 
     public function getForVehicle(int $vehicleId): Collection
     {
-        return $this->model->forVehicle($vehicleId)->orderBy('opened_at', 'desc')->get();
+        return $this->model->with('vehicle')->forVehicle($vehicleId)->orderBy('opened_at', 'desc')->get();
     }
 
     public function getForMechanic(int $mechanicId): Collection
     {
-        return $this->model->forMechanic($mechanicId)->orderBy('opened_at', 'desc')->get();
+        return $this->model->with('vehicle')->forMechanic($mechanicId)->orderBy('opened_at', 'desc')->get();
     }
 
     public function updateStatus(int $workOrderId, string $newStatus, array $timestamps = []): bool

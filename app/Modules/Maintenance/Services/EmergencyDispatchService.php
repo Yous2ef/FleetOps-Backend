@@ -11,8 +11,8 @@ class EmergencyDispatchService
     public function getActiveIncidents(): array
     {
         // Fetching incidents from the 'incident_reports' table.
-        // You can add ->where('type', 'Breakdown') or similar if needed.
-        return IncidentReport::with(['vehicle', 'driver'])
+        // Eager loading 'maintenanceAssignment' to see if it's already dispatched.
+        return IncidentReport::with(['vehicle', 'driver.user', 'maintenanceAssignment'])
             ->orderBy('incident_ts', 'desc')
             ->get()
             ->toArray();
@@ -21,7 +21,7 @@ class EmergencyDispatchService
     public function getIncidentDetails(int $id)
     {
         // Return detailed data for a specific incident.
-        return IncidentReport::with(['vehicle', 'driver'])->find($id);
+        return IncidentReport::with(['vehicle', 'driver.user', 'maintenanceAssignment'])->find($id);
     }
 
     public function getNearbyMechanics(int $id): array
@@ -66,20 +66,20 @@ class EmergencyDispatchService
             // 1. Fetch the incident to get the vehicle and details
             $incident = IncidentReport::findOrFail($incidentId);
 
-            // 2. Change mechanic's status
-            // Note: Currently, the `mechanics` table doesn't have a status field.
-            // In a real scenario, we might update a 'status' column on User or Driver model,
-            // or infer availability dynamically from active MaintenanceAssignments.
+            // 2. Update incident status to reflect dispatch
+            // Using 'In Progress' to match enum ['Open', 'Resolved', 'In Progress']
+            $incident->update(['status' => 'In Progress']);
 
             // 3. Create an emergency WorkOrder / MaintenanceAssignment
             $assignment = MaintenanceAssignment::create([
                 'vehicle_id'       => $incident->vehicle_id,
                 'mechanic_id'      => $data['mechanic_id'],
-                'fleet_manager_id' => auth()->id() ?? 1, // Fallback to 1 if auth is not available
-                'service_type'     => 'emergency',
+                'incident_id'      => $incidentId, // Link back to the incident
+                'fleet_manager_id' => auth()->id() ?? 1,
+                'service_type'     => 'other',
                 'priority'         => 'critical',
                 'status'           => 'assigned',
-                'issue'            => "Emergency Dispatch for Incident #{$incidentId} - Type: {$incident->type}",
+                'issue'            => "Emergency Dispatch for Incident #{$incidentId} - Type: {$incident->type} - Description: {$incident->description}",
             ]);
 
             return $assignment;

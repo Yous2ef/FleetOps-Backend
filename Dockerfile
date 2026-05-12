@@ -107,3 +107,17 @@ USER www-data
 EXPOSE 9000
 
 ENTRYPOINT ["docker-entrypoint.sh"]
+
+# ============================================
+# Development stage
+# ============================================
+FROM production AS development
+
+USER root
+# Install development dependencies
+RUN composer install \
+    --prefer-dist \
+    --optimize-autoloader
+
+USER www-data
+

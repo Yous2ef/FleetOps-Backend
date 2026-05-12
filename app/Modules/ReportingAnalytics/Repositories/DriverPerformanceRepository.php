@@ -45,12 +45,14 @@ class DriverPerformanceRepository extends BaseRepository
             ->where('driver_performance.period_start', '>=', $periodStart)
             ->where('driver_performance.period_end', '<=', $periodEnd)
             ->select(
+                'driver_performance.driver_id',
                 'users.name as Driver',
-                'driver_performance.on_time_delivery_pct as SpeedPct',
-                'driver_performance.fuel_per_100km as FuelConsumption',
-                'driver_performance.avg_customer_rating as Rating',
+                \Illuminate\Support\Facades\DB::raw('AVG(driver_performance.on_time_delivery_pct) as SpeedPct'),
+                \Illuminate\Support\Facades\DB::raw('AVG(driver_performance.fuel_per_100km) as FuelConsumption'),
+                \Illuminate\Support\Facades\DB::raw('AVG(driver_performance.avg_customer_rating) as Rating'),
                 'drivers.score as Score'
             )
+            ->groupBy('driver_performance.driver_id', 'users.name', 'drivers.score')
             ->orderByDesc('drivers.score')
             ->get();
 

@@ -251,7 +251,9 @@ class ModuleServiceProvider extends ServiceProvider
         $this->app->singleton(
             \App\Modules\Notification\Services\NotificationService::class,
             fn($app) => new \App\Modules\Notification\Services\NotificationService(
-                $app->make(\App\Modules\Notification\Repositories\NotificationRepository::class)
+                $app->make(\App\Modules\Notification\Repositories\NotificationRepository::class),
+                $app->make(\App\Modules\Notification\Repositories\NotificationPreferenceRepository::class),
+                $app->make(\App\Modules\Notification\Services\TemplateService::class)
             )
         );
 

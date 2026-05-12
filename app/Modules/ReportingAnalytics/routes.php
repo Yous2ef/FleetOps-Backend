@@ -14,7 +14,6 @@ use App\Modules\ReportingAnalytics\Controllers\incidentReportController;
 use App\Modules\ReportingAnalytics\Controllers\FuelController;
 use App\Modules\ReportingAnalytics\Controllers\CashLedgerController;
 
-
 Route::prefix('api/v1/analytics')->middleware('auth:sanctum')->group(function () {
 
     // ══════════════════════════════════════════════════════════════════════════

@@ -17,7 +17,6 @@ class DashboardService
             'ALERTS_DATA'           => $this->getAlertsData(),
             'WORK_ORDERS_DATA'      => $this->getWorkOrdersData(),
             'VEHICLES_ATTENTION_DATA' => $this->getVehiclesAttentionData(), // Fixed casing
-            'UPCOMING_MAINTENANCE_DATA' => $this->getUpcomingMaintenanceData(),
         ];
     }
 
@@ -74,7 +73,7 @@ class DashboardService
 
     private function getWorkOrdersData(): array
     {
-        return MaintenanceAssignment::with('vehicle')
+        return MaintenanceAssignment::with(['vehicle', 'mechanic.user'])
             ->orderBy('created_at', 'desc')
             ->take(10)
             ->get()
@@ -97,20 +96,5 @@ class DashboardService
         $vehicleIds = $overdueInspections->merge($criticalWorkOrders)->unique();
 
         return Vehicle::whereIn('vehicle_id', $vehicleIds)->get()->toArray();
-    }
-
-    private function getUpcomingMaintenanceData(): array
-    {
-        // $upcomingInspections = VehicleInspection::whereNotNull('next_inspection_date')
-        //     ->with('vehicle')->where('next_inspection_date', '>=', Carbon::now())
-        //     ->orderBy('next_inspection_date', 'asc')
-        //     ->take(10)
-        //     ->get();
-        // The vehicle_inspections table does not exist in the DB, returning empty array
-        $upcomingInspections = [];
-
-        return [
-            'upcoming_inspections' => $upcomingInspections,
-        ];
     }
 }

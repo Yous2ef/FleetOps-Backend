@@ -158,7 +158,6 @@ class RouteOptimizationService
     private const STOP_DURATION_SECONDS = 600;
 
     /**
-     * Optimize provided clusters (mock implementation for frontend raw payloads)
      * Accepts clusters in shape: [{zone, orders_ids: [int,...]}]
      * Returns clusters with ordered_stops and summary metrics.
      *

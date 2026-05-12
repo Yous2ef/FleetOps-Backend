@@ -6,7 +6,9 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 
 /**
- * IncidentReportSeeder — بلاغات حوادث حقيقية
+ * IncidentReportSeeder — real incident reports linked to actual drivers & vehicles.
+ *
+ * Idempotent: uses updateOrInsert keyed on (driver_id, incident_ts).
  */
 class IncidentReportSeeder extends Seeder
 {
@@ -20,6 +22,8 @@ class IncidentReportSeeder extends Seeder
             return;
         }
 
+        $now = now();
+
         $reports = [
             [
                 'driver_id'   => $drivers[1] ?? $drivers[0],
@@ -30,7 +34,7 @@ class IncidentReportSeeder extends Seeder
                 'latitude'    => 30.0561,
                 'longitude'   => 31.2394,
                 'photo_urls'  => json_encode(['https://storage.fleetops.com/incidents/inc-001-a.jpg']),
-                'incident_ts' => '2026-04-27 11:45:00',
+                'incident_ts' => $now->copy()->subDays(15)->setHour(11)->setMinute(45)->setSecond(0)->toDateTimeString(),
             ],
             [
                 'driver_id'   => $drivers[0],
@@ -41,26 +45,59 @@ class IncidentReportSeeder extends Seeder
                 'latitude'    => 30.0626,
                 'longitude'   => 31.3417,
                 'photo_urls'  => null,
-                'incident_ts' => '2026-04-26 14:20:00',
+                'incident_ts' => $now->copy()->subDays(16)->setHour(14)->setMinute(20)->setSecond(0)->toDateTimeString(),
             ],
             [
                 'driver_id'   => $drivers[2] ?? $drivers[0],
                 'vehicle_id'  => $vehicles[2] ?? $vehicles[0],
                 'type'        => 'cargo_damage',
                 'severity'    => 'medium',
-                'description' => 'Two fragile packages (QR-10030001, QR-10030002) damaged due to sudden braking. Customer notified.',
+                'description' => 'Two fragile packages damaged due to sudden braking on Ring Road. Customer notified.',
                 'latitude'    => 30.0131,
                 'longitude'   => 31.2089,
                 'photo_urls'  => json_encode([
                     'https://storage.fleetops.com/incidents/inc-003-a.jpg',
                     'https://storage.fleetops.com/incidents/inc-003-b.jpg',
                 ]),
-                'incident_ts' => '2026-04-27 09:10:00',
+                'incident_ts' => $now->copy()->subDays(15)->setHour(9)->setMinute(10)->setSecond(0)->toDateTimeString(),
+            ],
+            [
+                'driver_id'   => $drivers[3] ?? $drivers[0],
+                'vehicle_id'  => $vehicles[3] ?? $vehicles[0],
+                'type'        => 'accident',
+                'severity'    => 'medium',
+                'description' => 'Minor rear-end collision at Giza toll gate. No injuries. Front bumper cracked.',
+                'latitude'    => 30.0222,
+                'longitude'   => 31.1950,
+                'photo_urls'  => json_encode(['https://storage.fleetops.com/incidents/inc-004-a.jpg']),
+                'incident_ts' => $now->copy()->subDays(7)->setHour(16)->setMinute(30)->setSecond(0)->toDateTimeString(),
+            ],
+            [
+                'driver_id'   => $drivers[4] ?? $drivers[0],
+                'vehicle_id'  => $vehicles[4] ?? $vehicles[0],
+                'type'        => 'breakdown',
+                'severity'    => 'critical',
+                'description' => 'Refrigerated unit temperature alarm — compressor failure. Cargo spoilage risk. Emergency retrieval dispatched.',
+                'latitude'    => 29.8741,
+                'longitude'   => 30.9958,
+                'photo_urls'  => json_encode(['https://storage.fleetops.com/incidents/inc-005-a.jpg']),
+                'incident_ts' => $now->copy()->subDays(3)->setHour(8)->setMinute(0)->setSecond(0)->toDateTimeString(),
             ],
         ];
 
-        DB::table('incident_reports')->insert($reports);
+        $inserted = 0;
+        foreach ($reports as $r) {
+            $exists = DB::table('incident_reports')
+                ->where('driver_id', $r['driver_id'])
+                ->where('incident_ts', $r['incident_ts'])
+                ->exists();
 
-        $this->command->info('✅ IncidentReportSeeder: ' . count($reports) . ' incident reports ready.');
+            if (! $exists) {
+                DB::table('incident_reports')->insert($r);
+                $inserted++;
+            }
+        }
+
+        $this->command->info("✅ IncidentReportSeeder: {$inserted} new incident reports added (total: " . count($reports) . ').');
     }
 }

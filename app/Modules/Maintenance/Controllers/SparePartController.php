@@ -1,17 +1,9 @@
 <?php
 
-/**
- * @file: SparePartController.php
- * @description: متحكم قطع الغيار والمخزون - Maintenance Service (fn31 / MT-05)
- * @module: Maintenance
- * @author: Team Leader (Khalid)
- */
-
 namespace App\Modules\Maintenance\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Maintenance\Services\SparePartService;
-use App\Modules\Maintenance\Requests\SparePartRequest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -24,52 +16,76 @@ class SparePartController extends Controller
         $this->sparePartService = $sparePartService;
     }
 
-    /** GET /api/v1/maintenance/parts */
+    // دالة مساعدة لتوحيد شكل الداتا اللي راجعة للفرونت إند
+    private function mapToFrontend($part)
+    {
+        return [
+            'id' => 'PRT-' . $part->part_id,
+            'name' => $part->name,
+            'sku' => $part->sku,
+            'category' => $part->category ?? 'other',
+            'quantity' => $part->stock_quantity,
+            'minThreshold' => $part->minimum_stock,
+            'maxLevel' => $part->reorder_level ?? 200,
+            'unitPrice' => (float) $part->unit_price,
+            'location' => $part->description ?? 'Warehouse',
+            'supplier' => $part->supplier_name ?? 'N/A',
+            'lastRestocked' => $part->updated_at ? $part->updated_at->toIso8601String() : null,
+            // داتا عشوائية مؤقتة عشان الـ Chart يشتغل
+            'monthlyUsage' => [rand(10, 50), rand(20, 80), rand(15, 60), rand(30, 90), rand(10, 40), rand(25, 75)]
+        ];
+    }
+
+    // دالة مساعدة لتوحيد الداتا اللي جاية من الفرونت إند قبل ما نحفظها في الداتا بيز
+    private function mapToBackend(Request $request)
+    {
+        return [
+            'name' => $request->input('name'),
+            'sku' => $request->input('sku'),
+            'category' => $request->input('category', 'other'),
+            // لو الفرونت بعت unitPrice هاتها، لو مبعتش دور على unit_price
+            'unit_price' => $request->input('unitPrice', $request->input('unit_price', 0)),
+            'stock_quantity' => $request->input('quantity', $request->input('stock_quantity', 0)),
+            'minimum_stock' => $request->input('minThreshold', $request->input('minimum_stock', 0)),
+            'reorder_level' => $request->input('maxLevel', $request->input('reorder_level', null)),
+            'supplier_name' => $request->input('supplier', $request->input('supplier_name', null)),
+            'description' => $request->input('location', $request->input('description', null)),
+        ];
+    }
+
     public function index(): JsonResponse
     {
-        // TODO: return paginated parts list (with filter by category)
+        $parts = $this->sparePartService->getAllParts();
+        $formatted = $parts->map(fn($part) => $this->mapToFrontend($part));
+        return response()->json($formatted);
     }
 
-    /** GET /api/v1/maintenance/parts/{id} */
-    public function show(int $id): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-        // TODO: return single part
+        // نستخدم المابينج هنا عشان ننظف الداتا قبل الحفظ
+        $data = $this->mapToBackend($request);
+        $part = $this->sparePartService->createPart($data);
+
+        return response()->json($this->mapToFrontend($part), 201);
     }
 
-    /** POST /api/v1/maintenance/parts */
-    public function store(SparePartRequest $request): JsonResponse
+    public function update(int $id, Request $request): JsonResponse
     {
-        // TODO: Create part → 201
+        // ونستخدمه هنا كمان في التعديل
+        $data = $this->mapToBackend($request);
+        $part = $this->sparePartService->updatePart($id, $data);
+
+        return response()->json($this->mapToFrontend($part));
     }
 
-    /** PUT /api/v1/maintenance/parts/{id} */
-    public function update(int $id, SparePartRequest $request): JsonResponse
-    {
-        // TODO: Update part
-    }
-
-    /** DELETE /api/v1/maintenance/parts/{id} */
-    public function destroy(int $id): JsonResponse
-    {
-        // TODO: Delete part
-    }
-
-    /**
-     * قطع الغيار المنخفضة في المخزون
-     * GET /api/v1/maintenance/parts/low-stock
-     */
-    public function lowStock(): JsonResponse
-    {
-        // TODO: return $this->sparePartService->getLowStockParts()
-    }
-
-    /**
-     * تعديل المخزون يدوياً (إضافة/خصم)
-     * POST /api/v1/maintenance/parts/{id}/adjust-stock
-     */
     public function adjustStock(int $id, Request $request): JsonResponse
     {
-        // TODO: Validate: quantity (integer, min:1), operation (in:add,deduct)
-        // $this->sparePartService->adjustStock($id, $request->quantity, $request->operation)
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+            'operation' => 'required|in:add,deduct'
+        ]);
+
+        $this->sparePartService->adjustStock($id, $request->quantity, $request->operation);
+        return response()->json(['success' => true]);
     }
 }

@@ -5,33 +5,30 @@ namespace Database\Seeders;
 use App\Modules\RealtimeTracking\Models\GpsPing;
 use App\Modules\RouteDispatch\Models\Route;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class GpsPingSeeder extends Seeder
 {
+    private const TRACKABLE_ORDER_STATUSES = ['InTransit', 'Out for Delivery'];
+
     public function run(): void
     {
-        $routes = Route::whereIn('status', ['Planned', 'Active', 'InProgress', 'In_progress'])
+        $routes = Route::whereIn('status', ['Active', 'InProgress', 'In_progress'])
             ->orderBy('route_id')
             ->get();
 
-        $anchors = [
-            ['lat' => 30.0444, 'lng' => 31.2357],
-            ['lat' => 30.0619, 'lng' => 31.3283],
-            ['lat' => 29.9792, 'lng' => 31.1342],
-            ['lat' => 30.0131, 'lng' => 31.2089],
-            ['lat' => 30.1286, 'lng' => 31.2422],
-            ['lat' => 30.0595, 'lng' => 31.2233],
-        ];
-
-        foreach ($routes as $routeIndex => $route) {
+        foreach ($routes as $route) {
             if (!$route->driver_id) {
                 continue;
             }
 
             GpsPing::where('route_id', $route->route_id)->delete();
 
-            $anchor = $anchors[$routeIndex % count($anchors)];
-            $points = $this->buildTrailPoints($anchor, (int) $route->route_id);
+            $points = $this->buildTrailPoints($route);
+            if (empty($points)) {
+                continue;
+            }
+
             $startedAt = now()->subMinutes(count($points) * 2);
 
             foreach ($points as $index => $point) {
@@ -51,21 +48,106 @@ class GpsPingSeeder extends Seeder
         }
     }
 
-    private function buildTrailPoints(array $anchor, int $routeId): array
+    private function buildTrailPoints(Route $route): array
     {
-        $pointCount = 10;
-        $radius = 0.018 + ($routeId % 5) * 0.004;
+        $orderPoints = $this->getOrderPointsForRoute($route);
+
+        if (empty($orderPoints)) {
+            return [];
+        }
+
+        $depot = $this->buildDepotPoint($orderPoints[0], (int) $route->route_id);
+        $anchors = array_merge([$depot], $orderPoints);
         $points = [];
 
-        for ($i = 0; $i < $pointCount; $i++) {
-            $angle = (($i + $routeId) / ($pointCount - 1)) * 1.35 * pi();
+        foreach ($anchors as $index => $anchor) {
+            if ($index === 0) {
+                $points[] = $anchor;
+                continue;
+            }
+
+            $previous = $anchors[$index - 1];
+            foreach ($this->interpolatePoints($previous, $anchor, 3) as $point) {
+                $points[] = $point;
+            }
+        }
+
+        return $points;
+    }
+
+    private function getOrderPointsForRoute(Route $route): array
+    {
+        $limit = max(1, (int) ($route->total_stops ?: 6));
+
+        $query = DB::table('order')
+            ->select('OrderID', 'Latitude', 'Longitude')
+            ->whereNotNull('Latitude')
+            ->whereNotNull('Longitude')
+            ->whereIn('Status', self::TRACKABLE_ORDER_STATUSES)
+            ->where('DriverID(FK)', $route->driver_id);
+
+        if ($route->vehicle_id) {
+            $query->where('vehicle_id(FK)', $route->vehicle_id);
+        }
+
+        $orders = $query
+            ->orderBy('OrderID')
+            ->limit($limit)
+            ->get();
+
+        if ($orders->isEmpty() && $route->vehicle_id) {
+            $orders = DB::table('order')
+                ->select('OrderID', 'Latitude', 'Longitude')
+                ->whereNotNull('Latitude')
+                ->whereNotNull('Longitude')
+                ->whereIn('Status', self::TRACKABLE_ORDER_STATUSES)
+                ->where('DriverID(FK)', $route->driver_id)
+                ->orderBy('OrderID')
+                ->limit($limit)
+                ->get();
+        }
+
+        return $orders
+            ->map(fn ($order) => [
+                'lat' => (float) $order->Latitude,
+                'lng' => (float) $order->Longitude,
+            ])
+            ->filter(fn ($point) => $this->isValidPoint($point))
+            ->values()
+            ->all();
+    }
+
+    private function buildDepotPoint(array $firstOrderPoint, int $routeId): array
+    {
+        $offset = 0.01 + ($routeId % 4) * 0.002;
+
+        return [
+            'lat' => $firstOrderPoint['lat'] - $offset,
+            'lng' => $firstOrderPoint['lng'] - ($offset / 1.5),
+        ];
+    }
+
+    private function interpolatePoints(array $from, array $to, int $steps): array
+    {
+        $points = [];
+
+        for ($step = 1; $step <= $steps; $step++) {
+            $ratio = $step / $steps;
             $points[] = [
-                'lat' => $anchor['lat'] + sin($angle) * $radius + ($i * 0.0012),
-                'lng' => $anchor['lng'] + cos($angle) * $radius + ($i * 0.001),
+                'lat' => $from['lat'] + (($to['lat'] - $from['lat']) * $ratio),
+                'lng' => $from['lng'] + (($to['lng'] - $from['lng']) * $ratio),
             ];
         }
 
         return $points;
+    }
+
+    private function isValidPoint(array $point): bool
+    {
+        return $point['lat'] >= -90
+            && $point['lat'] <= 90
+            && $point['lng'] >= -180
+            && $point['lng'] <= 180;
     }
 
     private function headingFor(array $points, int $index): float

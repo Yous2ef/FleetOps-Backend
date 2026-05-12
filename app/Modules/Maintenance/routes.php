@@ -92,7 +92,7 @@ Route::prefix('api/v1/maintenance')->middleware('auth:sanctum')->group(function 
         Route::get('/incidents', [EmergencyDispatchController::class, 'incidents'])->name('maintenance.emergency.incidents');
         Route::get('/incident-details/{id}', [EmergencyDispatchController::class, 'incidentDetails'])->name('maintenance.emergency.incident-details')->where('id', '[0-9]+');
         Route::get('/nearby-mechanics/{id}', [EmergencyDispatchController::class, 'nearbyMechanics'])->name('maintenance.emergency.nearby-mechanics')->where('id', '[0-9]+');
-        Route::post('/dispatch-mechanic/{id}', [EmergencyDispatchController::class, 'dispatchMechanic'])->name('maintenance.emergency.dispatch-mechanic')->where('id', '[0-9]+');
+        Route::post('/dispatch-mechanic/{incident_id}', [EmergencyDispatchController::class, 'dispatchMechanic'])->name('maintenance.emergency.dispatch-mechanic');
     });
 
     // =====================================================================

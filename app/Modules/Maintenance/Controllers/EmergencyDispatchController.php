@@ -87,12 +87,25 @@ class EmergencyDispatchController extends Controller
 
     /**
      * Dispatches a mechanic and creates an emergency work order.
-     * POST api/v1/maintenance/emergency/dispatch-mechanic/{id}
+     * POST api/v1/maintenance/emergency/dispatch-mechanic
+     *
+     * Body: { incident_id: int, mechanic_id: int }
      */
-    public function dispatchMechanic(int $id, Request $request): JsonResponse
+    public function dispatchMechanic(Request $request, $incident_id): JsonResponse
     {
+        // Merge incident_id from URL into request for validation
+        $request->merge(['incident_id' => $incident_id]);
+
+        $validated = $request->validate([
+            'incident_id' => 'required|integer|exists:incident_reports,incident_id',
+            'mechanic_id' => 'required|integer|exists:mechanics,mechanic_id',
+        ]);
+
         try {
-            $data = $this->dispatchService->dispatchMechanic($id, $request->all());
+            $data = $this->dispatchService->dispatchMechanic(
+                $validated['incident_id'],
+                ['mechanic_id' => $validated['mechanic_id']]
+            );
 
             return response()->json([
                 'success' => true,

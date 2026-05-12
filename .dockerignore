@@ -38,10 +38,6 @@ docker-compose*.yml
 *.swo
 *~
 
-# Testing
-tests
-phpunit.xml
-.phpunit.result.cache
 
 # Build artifacts
 *.log

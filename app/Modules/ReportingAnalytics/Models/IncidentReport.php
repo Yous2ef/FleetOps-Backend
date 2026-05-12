@@ -81,4 +81,10 @@ class IncidentReport extends Model
     {
         return $this->belongsTo(Vehicle::class, 'vehicle_id', 'vehicle_id');
     }
+
+    /** The maintenance assignment linked to this incident */
+    public function maintenanceAssignment()
+    {
+        return $this->hasOne(\App\Modules\Maintenance\Models\MaintenanceAssignment::class, 'incident_id', 'incident_id');
+    }
 }

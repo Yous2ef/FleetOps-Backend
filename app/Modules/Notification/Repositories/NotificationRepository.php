@@ -11,6 +11,8 @@ namespace App\Modules\Notification\Repositories;
 
 use App\Modules\Shared\Repositories\BaseRepository;
 use App\Modules\Notification\Models\Notification;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 
 class NotificationRepository extends BaseRepository
 {
@@ -19,33 +21,88 @@ class NotificationRepository extends BaseRepository
         parent::__construct($model);
     }
 
-    public function getForUser(int $userId, int $perPage = 15)
+    /**
+     * Get paginated notifications for a specific user, latest first.
+     *
+     * @param int $userId
+     * @param int $perPage
+     * @return LengthAwarePaginator
+     */
+    public function getForUser(int $userId, int $perPage = 15): LengthAwarePaginator
     {
         return $this->model->forUser($userId)->latest()->paginate($perPage);
     }
 
+    /**
+     * Find a notification by its deduplication key within the last 5 minutes.
+     * Returns null if no recent duplicate exists.
+     *
+     * @param string $dedupKey
+     * @return Notification|null
+     */
     public function findByDedupKey(string $dedupKey): ?Notification
     {
-        // TODO: return $this->model->where('dedup_key', $dedupKey)->where('created_at', '>=', now()->subMinutes(5))->first();
+        return $this->model
+            ->where('dedup_key', $dedupKey)
+            ->where('created_at', '>=', now()->subMinutes(5))
+            ->first();
     }
 
+    /**
+     * Mark a notification as sent by setting status and sent_at timestamp.
+     *
+     * @param int $notificationId
+     * @return bool
+     */
     public function markAsSent(int $notificationId): bool
     {
-        // TODO: return $this->update($notificationId, ['status' => 'sent', 'sent_at' => now()]);
+        return $this->update($notificationId, [
+            'status'  => 'sent',
+            'sent_at' => now(),
+        ]);
     }
 
+    /**
+     * Mark a notification as delivered by setting status and delivered_at timestamp.
+     *
+     * @param int $notificationId
+     * @return bool
+     */
     public function markAsDelivered(int $notificationId): bool
     {
-        // TODO: return $this->update($notificationId, ['status' => 'delivered', 'delivered_at' => now()]);
+        return $this->update($notificationId, [
+            'status'       => 'delivered',
+            'delivered_at' => now(),
+        ]);
     }
 
+    /**
+     * Mark a notification as failed with the reason and incremented retry count.
+     *
+     * @param int    $notificationId
+     * @param string $reason
+     * @param int    $retryCount
+     * @return bool
+     */
     public function markAsFailed(int $notificationId, string $reason, int $retryCount): bool
     {
-        // TODO: return $this->update($notificationId, ['status' => 'failed', 'failed_reason' => $reason, 'retry_count' => $retryCount]);
+        return $this->update($notificationId, [
+            'status'        => 'failed',
+            'failed_reason' => $reason,
+            'retry_count'   => $retryCount,
+        ]);
     }
 
-    public function getFailedForRetry(): \Illuminate\Database\Eloquent\Collection
+    /**
+     * Get all failed notifications that still have retries remaining (retry_count < 3).
+     *
+     * @return Collection
+     */
+    public function getFailedForRetry(): Collection
     {
-        // TODO: return $this->model->failed()->where('retry_count', '<', 3)->get();
+        return $this->model
+            ->failed()
+            ->where('retry_count', '<', 3)
+            ->get();
     }
 }
