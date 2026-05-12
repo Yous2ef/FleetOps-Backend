@@ -341,8 +341,8 @@ class ReportService
     public function getActiveFleetData(string $date): array
     {
         $routes = Route::with(['driver.user', 'stops.order'])
-            ->where('status', 'Active')
-            ->whereDate('scheduled_start_time', $date)
+            ->whereIn('status', ['Active', 'InProgress', 'In_progress'])
+            ->whereDate('scheduled_start_time', '<=', $date)
             ->get()
             ->unique('driver_id');
 
@@ -394,28 +394,36 @@ class ReportService
 
             // ── 1. Active Routes ─────────────────────────────────────────────────
             $activeRoutes    = Route::query()
-                ->where('status', 'Active')
-                ->whereDate('scheduled_start_time', $date)
+                ->whereIn('status', ['Active', 'InProgress', 'In_progress'])
+                ->whereDate('scheduled_start_time', '<=', $date)
                 ->count();
 
             $yesterdayRoutes = Route::query()
-                ->where('status', 'Active')
-                ->whereDate('scheduled_start_time', $yesterday->toDateString())
+                ->whereIn('status', ['Active', 'InProgress', 'In_progress'])
+                ->whereDate('scheduled_start_time', '<=', $yesterday->toDateString())
                 ->count();
 
-            // ── 2. Orders Today ──────────────────────────────────────────────────
+            // ── 2. Orders Today (Created or Scheduled for today) ────────────────
             $ordersToday     = Order::query()
-                ->whereDate('Created_at', $date)
+                ->where(function($q) use ($date) {
+                    $q->whereDate('Created_at', $date)
+                      ->orWhereDate('PromisedWindow', $date);
+                })
                 ->count();
 
             $ordersYesterday = Order::query()
-                ->whereDate('Created_at', $yesterday->toDateString())
+                ->where(function($q) use ($yesterday) {
+                    $q->whereDate('Created_at', $yesterday->toDateString())
+                      ->orWhereDate('PromisedWindow', $yesterday->toDateString());
+                })
                 ->count();
 
-            // ── 3. Open Alerts (unresolved incidents) ────────────────────────────
             $openAlerts = IncidentReport::query()
-                ->open()
-                ->whereDate('incident_ts', '<=', $date)
+                ->where(function($q) {
+                    $q->whereIn('status', ['Open', 'In Progress'])
+                      ->orWhereNull('status');
+                })
+                ->where('incident_ts', '<=', $date . ' 23:59:59')
                 ->count();
 
             // ── 4. Fuel Efficiency (km/L) ────────────────────────────────────────
@@ -433,8 +441,17 @@ class ReportService
                 ->whereDate('DeliveredAt', $yesterday->toDateString())
                 ->count();
 
-            $deliveryRate          = $ordersToday > 0 ? round(($deliveredToday / $ordersToday) * 100, 1) : 0.0;
-            $deliveryRateYesterday = $ordersYesterday > 0 ? round(($deliveredYesterday / $ordersYesterday) * 100, 1) : 0.0;
+            // Total orders that WERE due today or yesterday (to calculate rate)
+            $dueToday = Order::query()
+                ->whereDate('PromisedWindow', $date)
+                ->count();
+            
+            $dueYesterday = Order::query()
+                ->whereDate('PromisedWindow', $yesterday->toDateString())
+                ->count();
+
+            $deliveryRate          = $dueToday > 0 ? round(($deliveredToday / $dueToday) * 100, 1) : 0.0;
+            $deliveryRateYesterday = $dueYesterday > 0 ? round(($deliveredYesterday / $dueYesterday) * 100, 1) : 0.0;
             
             // ── Build Response ───────────────────────────────────────────────────
             return [
@@ -527,7 +544,7 @@ class ReportService
         }
 
         // Calculate distance from routes that have actual distance recorded on this date
-        $totalDistance = Route::whereIn('status', ['Completed', 'Active'])
+        $totalDistance = Route::whereIn('status', ['Completed', 'Active', 'InProgress', 'In_progress'])
             ->whereDate('scheduled_start_time', $date)
             ->whereNotNull('total_distance')
             ->sum('total_distance');

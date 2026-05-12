@@ -14,7 +14,6 @@ class DashboardService
     {
         return [
             'KPI_DATA'              => $this->getKpiData(),
-            'ALERTS_DATA'           => $this->getAlertsData(),
             'WORK_ORDERS_DATA'      => $this->getWorkOrdersData(),
             'VEHICLES_ATTENTION_DATA' => $this->getVehiclesAttentionData(), // Fixed casing
         ];
@@ -42,32 +41,6 @@ class DashboardService
             'out_of_service_vehicles' => $outOfServiceVehicles,
             'open_work_orders'        => $openWorkOrders,
             'urgent_work_orders'      => $urgentWorkOrders,
-        ];
-    }
-
-    private function getAlertsData(): array
-    {
-        $insuranceAlerts = []; 
-        $retirementFlags = Vehicle::where('CreatedAt', '<', Carbon::now()->subYears(10))->get();
-
-        // The vehicle_inspections table does not exist in the DB, returning empty array
-
-        //     $inspectionOverdue = VehicleInspection::whereNotNull('next_inspection_date')
-        //     ->where('next_inspection_date', '<', Carbon::now())
-        //     ->with('vehicle')
-        //     ->get();
-        $inspectionOverdue = [];
-
-        // The spare_parts table does not exist (and Inventory lacks minimum_stock), returning empty array
-
-        // $stockAlerts = SparePart::whereColumn('stock_quantity', '<', 'minimum_stock')->get();
-        $stockAlerts = [];
-
-        return [
-            'insurance_alerts'   => $insuranceAlerts,
-            'inspection_overdue' => $inspectionOverdue,
-            'retirement_flags'   => $retirementFlags,
-            'stock_alerts'       => $stockAlerts,
         ];
     }
 
